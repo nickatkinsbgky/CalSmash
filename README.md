@@ -60,10 +60,30 @@ npx serve .
 Settings → Pages → Deploy from `main` branch / root.  
 Live: `https://nickatkinsbgky.github.io/CalSmash/`
 
-## Usage
-1. Add Outlook / Google / iCloud accounts.
-2. Events load color-coded by account.
-3. Toggle calendars in the sidebar.
-4. Refresh as needed.
+## Android App (Capacitor) — Local Outlook Viewer
 
-Built as an improved multi-provider calendar viewer.
+CalSmash can run as a native Android app that **reads the calendars already synced by the Outlook app on your device**. No cloud re-auth required for those.
+
+### Setup (once)
+```bash
+npm install
+npx cap sync android
+```
+
+### Open in Android Studio
+```bash
+npx cap open android
+```
+- Build & run on your device or emulator.
+- Grant the Calendar permission when prompted.
+- The app lists device calendars (Outlook ones marked with ★) and shows their events in the same FullCalendar UI.
+
+### Notes
+- Uses the official `@capacitor/calendar` plugin (`listCalendars` + `findEvents`).
+- Permissions (`READ_CALENDAR`) are declared automatically; runtime permission is requested on first load.
+- Cloud accounts (Outlook Graph, Google, iCloud) still work alongside the local view if you add them.
+- Web assets live in `www/` (index.html + manifest.json).
+- After changing web code: `npx cap copy android` or `npx cap sync android`.
+
+### Build APK
+In Android Studio: Build → Generate Signed Bundle / APK, or just Run for a debug APK.
