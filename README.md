@@ -87,3 +87,13 @@ npx cap open android
 
 ### Build APK
 In Android Studio: Build → Generate Signed Bundle / APK, or just Run for a debug APK.
+
+### Download APK from GitHub (on your phone)
+A GitHub Actions workflow (`.github/workflows/build-apk.yml`) builds a debug APK on every push to `main` and on manual trigger.
+
+1. Open the repo on your phone: https://github.com/nickatkinsbgky/CalSmash
+2. Go to **Actions** → latest **Build CalSmash APK** run → download the **CalSmash-debug-apk** artifact, **or**
+3. Trigger the workflow manually (Actions → Build CalSmash APK → Run workflow) to also create a **Release** with the APK attached.
+4. Open **Releases**, tap the `.apk`, download, and install (allow unknown sources if prompted).
+
+The debug APK is signed with the debug keystore and installs immediately for testing.
