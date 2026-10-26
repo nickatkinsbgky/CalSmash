@@ -39,10 +39,20 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Accept Android licenses
+      - name: Install Android SDK 36 and accept licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Force compileSdk 36
+        run: |
+          # Update compileSdk / targetSdk in the generated project
+          sed -i 's/compileSdk = 35/compileSdk = 36/g' android/variables.gradle || true
+          sed -i 's/compileSdkVersion 35/compileSdkVersion 36/g' android/app/build.gradle || true
+          sed -i 's/targetSdkVersion 35/targetSdkVersion 36/g' android/app/build.gradle || true
+          # Also try common Capacitor locations
+          find android -name "*.gradle" -exec sed -i 's/compileSdk[[:space:]]*=[[:space:]]*35/compileSdk = 36/g' {} \;
+          find android -name "*.gradle" -exec sed -i 's/compileSdkVersion[[:space:]]*35/compileSdkVersion 36/g' {} \;
 
       - name: Build debug APK
         working-directory: android
