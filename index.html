@@ -156,6 +156,15 @@
       <button id="addOutlook">Add Outlook</button>
       <button id="addGoogle" class="google">Add Google</button>
       <button id="addICloud" class="icloud">Add iCloud</button>
+      <select id="viewSelect" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:8px 12px;font-weight:600;">
+        <option value="dayGridMonth">Month</option>
+        <option value="timeGridWeek">Week</option>
+        <option value="timeGridDay">Day</option>
+        <option value="listMonth">List Month</option>
+        <option value="listWeek">List Week</option>
+        <option value="listDay">List Day</option>
+        <option value="multiMonthYear">Year</option>
+      </select>
       <button id="refresh" class="secondary">Refresh</button>
       <button id="logout" class="secondary">Sign Out All</button>
     </div>
@@ -199,7 +208,6 @@
     // ====== CONFIG ======
     const MS_CLIENT_ID = 'YOUR_MS_CLIENT_ID_HERE'; // Azure app client ID
     const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE'; // Google Cloud OAuth client ID
-    const ICLOUD_PROXY_URL = 'YOUR_ICLOUD_PROXY_URL_HERE'; // Cloudflare Worker URL, e.g. https://calsmash-icloud.yourname.workers.dev (no trailing slash)
     const AUTHORITY = 'https://login.microsoftonline.com/common';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const MS_SCOPES = ['Calendars.Read', 'User.Read'];
@@ -265,6 +273,9 @@
       };
       document.getElementById('icloudConnect').onclick = tryICloudConnect;
       document.getElementById('addIcs').onclick = addPublicIcs;
+      document.getElementById('viewSelect').onchange = (e) => {
+        if (calendar) calendar.changeView(e.target.value);
+      };
       document.getElementById('refresh').onclick = loadAllEvents;
       document.getElementById('logout').onclick = logoutAll;
       initCalendar();
@@ -283,11 +294,10 @@
         alert('Enter both Apple ID and app-specific password.');
         return;
       }
-      const useProxy = ICLOUD_PROXY_URL && !ICLOUD_PROXY_URL.includes('YOUR_');
-      const base = useProxy ? ICLOUD_PROXY_URL.replace(/\/$/, '') + '/caldav' : 'https://caldav.icloud.com';
-      document.getElementById('status').textContent = useProxy ? 'Testing iCloud via proxy...' : 'Testing iCloud connection...';
+      document.getElementById('status').textContent = 'Testing iCloud connection...';
       try {
-        const res = await fetch(base + '/', {
+        // Attempt a simple PROPFIND — this will almost always fail due to CORS
+        const res = await fetch('https://caldav.icloud.com/', {
           method: 'PROPFIND',
           headers: {
             'Authorization': 'Basic ' + btoa(email + ':' + password),
@@ -299,19 +309,15 @@
         if (res.ok) {
           icloudAccounts.push({ email, password });
           document.getElementById('icloudModal').classList.remove('show');
-          alert(useProxy ? 'Connected via proxy.' : 'Connected.');
+          alert('Connected (rare success). Reloading events...');
           loadAllEvents();
         } else {
           throw new Error('HTTP ' + res.status);
         }
       } catch (e) {
         console.error(e);
-        if (!useProxy) {
-          alert('iCloud CalDAV blocked by CORS.\n\nSet ICLOUD_PROXY_URL in index.html to your Cloudflare Worker URL for full support.\n\nSee README for deploy steps.');
-        } else {
-          alert('iCloud proxy connection failed: ' + (e.message || e));
-        }
-        document.getElementById('status').textContent = useProxy ? 'iCloud proxy failed' : 'iCloud blocked by CORS';
+        alert('iCloud CalDAV blocked by CORS (expected).\n\nApple does not allow direct browser access to caldav.icloud.com.\n\nOptions:\n1. Use a public shared calendar ICS link (paste below).\n2. Set up a small backend proxy (Cloudflare Worker, etc.) to forward CalDAV requests.\n\nSee the README for details.');
+        document.getElementById('status').textContent = 'iCloud direct access blocked by CORS';
       }
     }
 
@@ -346,7 +352,17 @@
       const el = document.getElementById('calendar');
       calendar = new FullCalendar.Calendar(el, {
         initialView: 'dayGridMonth',
-        headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek' },
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth,listWeek,listDay,multiMonthYear'
+        },
+        views: {
+          multiMonthYear: { type: 'multiMonth', duration: { months: 12 }, buttonText: 'Year' },
+          listMonth: { buttonText: 'List Month' },
+          listWeek: { buttonText: 'List Week' },
+          listDay: { buttonText: 'List Day' }
+        },
         height: 'auto',
         themeSystem: 'standard',
         events: function(info, successCallback) {
