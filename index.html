@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>CalSmash</title>
-  <meta name="description" content="Smash all your Outlook and Google calendars into one unified view">
+  <meta name="description" content="Smash all your Outlook, Google, and iCloud calendars into one unified view">
   <meta name="theme-color" content="#3b82f6">
   <link rel="manifest" href="manifest.json">
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
@@ -66,8 +66,10 @@
     button.secondary:hover { background: var(--card); }
     button.google { background: #ea4335; }
     button.google:hover { background: #d93025; }
+    button.icloud { background: #007aff; }
+    button.icloud:hover { background: #0056b3; }
     #sidebar {
-      width: 320px;
+      width: 340px;
       background: var(--card);
       padding: 16px;
       border-right: 1px solid var(--border);
@@ -106,6 +108,36 @@
       padding: 6px 20px;
       background: #0c1222;
     }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal.show { display: flex; }
+    .modal-content {
+      background: var(--card);
+      padding: 24px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 420px;
+      border: 1px solid var(--border);
+    }
+    .modal-content h3 { margin-top: 0; }
+    .modal-content input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+    }
+    .modal-content .buttons { display: flex; gap: 10px; margin-top: 16px; }
+    .note { font-size: 0.8rem; color: var(--muted); margin-top: 12px; }
     .fc { color: var(--text); }
     .fc .fc-button { background: var(--primary) !important; border: none !important; }
     .fc .fc-button-active { background: var(--primary-hover) !important; }
@@ -123,6 +155,7 @@
     <div class="controls">
       <button id="addOutlook">Add Outlook</button>
       <button id="addGoogle" class="google">Add Google</button>
+      <button id="addICloud" class="icloud">Add iCloud</button>
       <button id="refresh" class="secondary">Refresh</button>
       <button id="logout" class="secondary">Sign Out All</button>
     </div>
@@ -131,10 +164,31 @@
   <div id="layout">
     <aside id="sidebar">
       <h3 style="margin-top:0; color: #60a5fa;">Accounts & Calendars</h3>
-      <div id="accountsList">No accounts signed in yet. Click <b>Add Outlook</b> or <b>Add Google</b>.</div>
+      <div id="accountsList">No accounts signed in yet. Click <b>Add Outlook</b>, <b>Add Google</b>, or <b>Add iCloud</b>.</div>
     </aside>
     <div id="calendar-container">
       <div id="calendar"></div>
+    </div>
+  </div>
+
+  <!-- iCloud Modal -->
+  <div id="icloudModal" class="modal">
+    <div class="modal-content">
+      <h3>Add iCloud Calendar</h3>
+      <p>Apple requires an <strong>app-specific password</strong> (not your Apple ID password). Generate one at <a href="https://appleid.apple.com" target="_blank" style="color:#60a5fa">appleid.apple.com</a> → Sign-In and Security → App-Specific Passwords.</p>
+      <input type="email" id="icloudEmail" placeholder="Apple ID / iCloud email" />
+      <input type="password" id="icloudPassword" placeholder="App-specific password (xxxx-xxxx-xxxx-xxxx)" />
+      <div class="buttons">
+        <button id="icloudConnect">Connect</button>
+        <button id="icloudCancel" class="secondary">Cancel</button>
+      </div>
+      <div class="note">
+        <strong>Note:</strong> Direct browser access to iCloud CalDAV is blocked by Apple's CORS policy. Full private calendar support requires a backend proxy. You can still add <strong>public shared calendars</strong> via an ICS URL below.
+      </div>
+      <hr style="border-color:var(--border); margin:16px 0">
+      <h4 style="margin:0 0 8px">Or add a public ICS link</h4>
+      <input type="url" id="icsUrl" placeholder="https://...ics or webcal://... (public shared calendar)" />
+      <button id="addIcs" style="margin-top:8px">Add Public ICS</button>
     </div>
   </div>
 
@@ -158,11 +212,13 @@
 
     let googleTokenClient;
     let googleAccounts = []; // { email, accessToken, expiresAt }
+    let icloudAccounts = []; // { email, password } — stored only in memory for this session
+    let publicIcs = []; // { name, url }
     let calendar;
     let allEvents = [];
     let calendarVisibility = {};
 
-    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
 
     async function init() {
       try {
@@ -171,7 +227,6 @@
         console.error(e);
       }
 
-      // Wait for GIS to load
       const waitForGIS = () => new Promise(resolve => {
         const check = () => {
           if (window.google?.accounts?.oauth2) resolve();
@@ -201,27 +256,76 @@
         }
         googleTokenClient.requestAccessToken({ prompt: 'consent' });
       };
+      document.getElementById('addICloud').onclick = () => {
+        document.getElementById('icloudModal').classList.add('show');
+      };
+      document.getElementById('icloudCancel').onclick = () => {
+        document.getElementById('icloudModal').classList.remove('show');
+      };
+      document.getElementById('icloudConnect').onclick = tryICloudConnect;
+      document.getElementById('addIcs').onclick = addPublicIcs;
       document.getElementById('refresh').onclick = loadAllEvents;
       document.getElementById('logout').onclick = logoutAll;
       initCalendar();
       updateUI();
-      if (msalInstance.getAllAccounts().length > 0 || googleAccounts.length > 0) {
+      if (msalInstance.getAllAccounts().length > 0 || googleAccounts.length > 0 || icloudAccounts.length > 0 || publicIcs.length > 0) {
         loadAllEvents();
       } else {
-        document.getElementById('status').textContent = 'Ready — add an Outlook or Google account';
+        document.getElementById('status').textContent = 'Ready — add an Outlook, Google, or iCloud account';
       }
+    }
+
+    async function tryICloudConnect() {
+      const email = document.getElementById('icloudEmail').value.trim();
+      const password = document.getElementById('icloudPassword').value.trim();
+      if (!email || !password) {
+        alert('Enter both Apple ID and app-specific password.');
+        return;
+      }
+      document.getElementById('status').textContent = 'Testing iCloud connection...';
+      try {
+        // Attempt a simple PROPFIND — this will almost always fail due to CORS
+        const res = await fetch('https://caldav.icloud.com/', {
+          method: 'PROPFIND',
+          headers: {
+            'Authorization': 'Basic ' + btoa(email + ':' + password),
+            'Depth': '0',
+            'Content-Type': 'application/xml'
+          },
+          body: '<propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>'
+        });
+        if (res.ok) {
+          icloudAccounts.push({ email, password });
+          document.getElementById('icloudModal').classList.remove('show');
+          alert('Connected (rare success). Reloading events...');
+          loadAllEvents();
+        } else {
+          throw new Error('HTTP ' + res.status);
+        }
+      } catch (e) {
+        console.error(e);
+        alert('iCloud CalDAV blocked by CORS (expected).\n\nApple does not allow direct browser access to caldav.icloud.com.\n\nOptions:\n1. Use a public shared calendar ICS link (paste below).\n2. Set up a small backend proxy (Cloudflare Worker, etc.) to forward CalDAV requests.\n\nSee the README for details.');
+        document.getElementById('status').textContent = 'iCloud direct access blocked by CORS';
+      }
+    }
+
+    function addPublicIcs() {
+      const url = document.getElementById('icsUrl').value.trim();
+      if (!url) return;
+      const name = 'Public ICS: ' + url.slice(0, 40);
+      publicIcs.push({ name, url });
+      document.getElementById('icsUrl').value = '';
+      document.getElementById('icloudModal').classList.remove('show');
+      loadAllEvents();
     }
 
     async function handleGoogleToken(resp) {
       const token = resp.access_token;
-      // Get user info
       const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
         headers: { Authorization: `Bearer ${token}` }
       });
       const user = await userRes.json();
       const email = user.email;
-
-      // Remove existing if re-adding
       googleAccounts = googleAccounts.filter(a => a.email !== email);
       googleAccounts.push({
         email,
@@ -270,6 +374,8 @@
         try { await msalInstance.logoutPopup({ account: acc }); } catch (e) { console.warn(e); }
       }
       googleAccounts = [];
+      icloudAccounts = [];
+      publicIcs = [];
       allEvents = [];
       calendarVisibility = {};
       updateUI();
@@ -279,14 +385,14 @@
 
     function updateUI() {
       const msAccounts = msalInstance.getAllAccounts();
-      const total = msAccounts.length + googleAccounts.length;
+      const total = msAccounts.length + googleAccounts.length + icloudAccounts.length + publicIcs.length;
       const list = document.getElementById('accountsList');
       if (total === 0) {
-        list.innerHTML = 'No accounts signed in yet. Click <b>Add Outlook</b> or <b>Add Google</b>.';
+        list.innerHTML = 'No accounts signed in yet. Click <b>Add Outlook</b>, <b>Add Google</b>, or <b>Add iCloud</b>.';
         document.getElementById('status').textContent = 'Not signed in';
         return;
       }
-      document.getElementById('status').textContent = `${total} account(s) connected`;
+      document.getElementById('status').textContent = `${total} source(s) connected`;
     }
 
     async function getMsToken(account) {
@@ -303,12 +409,12 @@
       if (account.expiresAt && Date.now() < account.expiresAt - 60000) {
         return account.accessToken;
       }
-      return null; // needs refresh via re-login for simplicity
+      return null;
     }
 
     async function loadAllEvents() {
       const msAccounts = msalInstance.getAllAccounts();
-      const totalAccounts = msAccounts.length + googleAccounts.length;
+      const totalAccounts = msAccounts.length + googleAccounts.length + icloudAccounts.length + publicIcs.length;
       if (totalAccounts === 0) return;
 
       document.getElementById('status').textContent = 'Loading calendars...';
@@ -322,7 +428,7 @@
 
       let colorIndex = 0;
 
-      // Microsoft / Outlook accounts
+      // Microsoft / Outlook
       for (const account of msAccounts) {
         const color = colors[colorIndex++ % colors.length];
         try {
@@ -380,12 +486,12 @@
         }
       }
 
-      // Google accounts
+      // Google
       for (const account of googleAccounts) {
         const color = colors[colorIndex++ % colors.length];
         const token = getGoogleToken(account);
         if (!token) {
-          accountsList.innerHTML += `<div class="account-item" style="color:#fbbf24">Google ${account.email}: token expired — click Add Google again to refresh</div>`;
+          accountsList.innerHTML += `<div class="account-item" style="color:#fbbf24">Google ${account.email}: token expired — click Add Google again</div>`;
           continue;
         }
         try {
@@ -444,7 +550,65 @@
         }
       }
 
-      document.getElementById('status').textContent = `Loaded ${allEvents.length} events from ${totalAccounts} account(s)`;
+      // Public ICS (best-effort; many public calendars still have CORS)
+      for (const ics of publicIcs) {
+        const color = colors[colorIndex++ % colors.length];
+        const key = `ics|${ics.url}`;
+        if (calendarVisibility[key] === undefined) calendarVisibility[key] = true;
+
+        const accDiv = document.createElement('div');
+        accDiv.className = 'account-item';
+        accDiv.innerHTML = `<strong style="color:${color}">${ics.name}<span class="provider-badge">(ICS)</span></strong>`;
+        const label = document.createElement('label');
+        label.className = 'cal-toggle';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = calendarVisibility[key];
+        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode('Public calendar'));
+        accDiv.appendChild(label);
+        accountsList.appendChild(accDiv);
+
+        try {
+          // Note: many ICS hosts also block CORS. This is best-effort.
+          const res = await fetch(ics.url.replace('webcal://', 'https://'));
+          if (res.ok) {
+            const text = await res.text();
+            // Very simple ICS parse (limited)
+            const lines = text.split(/\r?\n/);
+            let inEvent = false, title = '', start = '', end = '';
+            for (const line of lines) {
+              if (line.startsWith('BEGIN:VEVENT')) { inEvent = true; title = start = end = ''; }
+              else if (line.startsWith('END:VEVENT') && inEvent) {
+                if (start) {
+                  allEvents.push({
+                    id: 'ics-' + Math.random(),
+                    title: title || '(No title)',
+                    start,
+                    end: end || start,
+                    allDay: start.length === 8,
+                    backgroundColor: color,
+                    borderColor: color,
+                    textColor: '#fff',
+                    extendedProps: { account: ics.name, calendar: 'Public ICS', key, provider: 'ICS' }
+                  });
+                }
+                inEvent = false;
+              } else if (inEvent) {
+                if (line.startsWith('SUMMARY:')) title = line.slice(8);
+                if (line.startsWith('DTSTART')) start = line.split(':')[1]?.replace(/T.*Z?/, '') || '';
+                if (line.startsWith('DTEND')) end = line.split(':')[1]?.replace(/T.*Z?/, '') || '';
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('ICS fetch failed (CORS or network):', e);
+          accountsList.innerHTML += `<div class="account-item" style="color:#fbbf24">ICS ${ics.name}: could not fetch (CORS or invalid URL)</div>`;
+        }
+      }
+
+      document.getElementById('status').textContent = `Loaded ${allEvents.length} events from ${totalAccounts} source(s)`;
       calendar.refetchEvents();
     }
 
