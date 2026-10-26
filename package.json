@@ -1,0 +1,20 @@
+{
+  "name": "calsmash",
+  "version": "1.0.0",
+  "description": "A modern, standalone web calendar viewer that unifies events from multiple **Microsoft / Outlook**, **Google Calendar**, and **iCloud** sources into one clean FullCalendar view.",
+  "main": "icloud-proxy-worker.js",
+  "scripts": {
+    "cap:sync": "npx cap sync android",
+    "cap:open": "npx cap open android",
+    "cap:copy": "npx cap copy android"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/calendar": "^1.0.1",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^8.5.3"
+  }
+}
