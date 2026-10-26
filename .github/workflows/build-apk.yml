@@ -44,15 +44,28 @@ jobs:
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
-      - name: Force compileSdk 36
+      - name: Force compileSdk 36 and newer AGP
         run: |
-          # Update compileSdk / targetSdk in the generated project
-          sed -i 's/compileSdk = 35/compileSdk = 36/g' android/variables.gradle || true
-          sed -i 's/compileSdkVersion 35/compileSdkVersion 36/g' android/app/build.gradle || true
-          sed -i 's/targetSdkVersion 35/targetSdkVersion 36/g' android/app/build.gradle || true
-          # Also try common Capacitor locations
-          find android -name "*.gradle" -exec sed -i 's/compileSdk[[:space:]]*=[[:space:]]*35/compileSdk = 36/g' {} \;
-          find android -name "*.gradle" -exec sed -i 's/compileSdkVersion[[:space:]]*35/compileSdkVersion 36/g' {} \;
+          echo "=== Gradle files before patch ==="
+          find android -name "*.gradle" -o -name "*.gradle.kts" | head -20
+          # Patch all common locations
+          find android -type f \( -name "*.gradle" -o -name "*.gradle.kts" \) -exec sed -i \
+            -e 's/compileSdk[[:space:]]*=[[:space:]]*35/compileSdk = 36/g' \
+            -e 's/compileSdkVersion[[:space:]]*=[[:space:]]*35/compileSdkVersion = 36/g' \
+            -e 's/compileSdkVersion[[:space:]]*35/compileSdkVersion 36/g' \
+            -e 's/targetSdk[[:space:]]*=[[:space:]]*35/targetSdk = 36/g' \
+            -e 's/targetSdkVersion[[:space:]]*=[[:space:]]*35/targetSdkVersion = 36/g' \
+            -e 's/targetSdkVersion[[:space:]]*35/targetSdkVersion 36/g' \
+            {} +
+          # Bump AGP if present in build.gradle or settings
+          find android -type f \( -name "*.gradle" -o -name "*.gradle.kts" \) -exec sed -i \
+            -e 's/com.android.tools.build:gradle:8\.7\.[0-9]*/com.android.tools.build:gradle:8.9.1/g' \
+            -e 's/agp_version[[:space:]]*=[[:space:]]*"8\.7\.[0-9]*"/agp_version = "8.9.1"/g' \
+            {} +
+          echo "=== variables.gradle (if exists) ==="
+          cat android/variables.gradle 2>/dev/null || true
+          echo "=== app/build.gradle snippet ==="
+          head -40 android/app/build.gradle 2>/dev/null || true
 
       - name: Build debug APK
         working-directory: android
