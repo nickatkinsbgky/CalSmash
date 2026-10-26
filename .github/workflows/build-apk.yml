@@ -24,6 +24,12 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Remove incomplete android folder if present
+        run: rm -rf android
+
+      - name: Add Android platform
+        run: npx cap add android
+
       - name: Capacitor sync
         run: npx cap sync android
 
@@ -33,9 +39,9 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK and accept licenses
+      - name: Accept Android licenses
         run: |
-          echo "y" | sudo $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0" || true
 
       - name: Build debug APK
