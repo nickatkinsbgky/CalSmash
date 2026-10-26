@@ -283,12 +283,20 @@
       document.getElementById('addOutlook').onclick = addOutlookAccount;
       document.getElementById('addGoogle').onclick = () => {
         if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('YOUR_')) {
-          alert('Set GOOGLE_CLIENT_ID in the script first.');
+          alert('Set GOOGLE_CLIENT_ID in index.html first.\n\nSee README for Google Cloud setup.');
+          document.getElementById('status').textContent = 'Google: Client ID not set';
           return;
         }
-        googleTokenClient.requestAccessToken({ prompt: 'consent' });
+        document.getElementById('status').textContent = 'Opening Google login...';
+        try {
+          googleTokenClient.requestAccessToken({ prompt: 'consent' });
+        } catch (e) {
+          alert('Google login error: ' + (e.message || e));
+          document.getElementById('status').textContent = 'Google login failed';
+        }
       };
       document.getElementById('addICloud').onclick = () => {
+        document.getElementById('status').textContent = 'Opening iCloud options...';
         document.getElementById('icloudModal').classList.add('show');
       };
       document.getElementById('icloudCancel').onclick = () => {
@@ -419,13 +427,22 @@
     }
 
     async function addOutlookAccount() {
+      if (!MS_CLIENT_ID || MS_CLIENT_ID.includes('YOUR_')) {
+        alert('Set MS_CLIENT_ID in index.html first.\n\nSee README for Azure app registration steps.');
+        document.getElementById('status').textContent = 'Outlook: Client ID not set';
+        return;
+      }
+      document.getElementById('status').textContent = 'Opening Outlook login...';
       try {
         await msalInstance.loginPopup({ scopes: MS_SCOPES, prompt: 'select_account' });
+        document.getElementById('status').textContent = 'Outlook account added';
         updateUI();
         loadAllEvents();
       } catch (e) {
         console.error(e);
-        alert('Outlook login failed: ' + (e.message || e));
+        const msg = e.message || String(e);
+        alert('Outlook login failed:\n' + msg + '\n\nIn the APK, popups can be limited. Try the web version or check client ID / redirect URI.');
+        document.getElementById('status').textContent = 'Outlook login failed';
       }
     }
 
