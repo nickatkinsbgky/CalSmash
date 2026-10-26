@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>CalSmash</title>
-  <meta name="description" content="Smash all your Outlook calendars into one unified view">
+  <meta name="description" content="Smash all your Outlook and Google calendars into one unified view">
   <meta name="theme-color" content="#3b82f6">
   <link rel="manifest" href="manifest.json">
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
@@ -64,8 +64,10 @@
       border: 1px solid var(--border);
     }
     button.secondary:hover { background: var(--card); }
+    button.google { background: #ea4335; }
+    button.google:hover { background: #d93025; }
     #sidebar {
-      width: 300px;
+      width: 320px;
       background: var(--card);
       padding: 16px;
       border-right: 1px solid var(--border);
@@ -88,6 +90,7 @@
       border: 1px solid var(--border);
     }
     .account-item strong { display: block; margin-bottom: 8px; font-size: 0.95rem; }
+    .provider-badge { font-size: 0.75rem; opacity: 0.8; margin-left: 6px; }
     .cal-toggle {
       display: flex;
       align-items: center;
@@ -118,7 +121,8 @@
   <header>
     <h1>CalSmash</h1>
     <div class="controls">
-      <button id="addAccount">Add Account</button>
+      <button id="addOutlook">Add Outlook</button>
+      <button id="addGoogle" class="google">Add Google</button>
       <button id="refresh" class="secondary">Refresh</button>
       <button id="logout" class="secondary">Sign Out All</button>
     </div>
@@ -127,7 +131,7 @@
   <div id="layout">
     <aside id="sidebar">
       <h3 style="margin-top:0; color: #60a5fa;">Accounts & Calendars</h3>
-      <div id="accountsList">No accounts signed in yet. Click <b>Add Account</b>.</div>
+      <div id="accountsList">No accounts signed in yet. Click <b>Add Outlook</b> or <b>Add Google</b>.</div>
     </aside>
     <div id="calendar-container">
       <div id="calendar"></div>
@@ -136,19 +140,24 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script>
     // ====== CONFIG ======
-    const CLIENT_ID = 'YOUR_CLIENT_ID_HERE'; // <-- replace with your Azure app client ID
+    const MS_CLIENT_ID = 'YOUR_MS_CLIENT_ID_HERE'; // Azure app client ID
+    const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE'; // Google Cloud OAuth client ID
     const AUTHORITY = 'https://login.microsoftonline.com/common';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
-    const SCOPES = ['Calendars.Read', 'User.Read'];
+    const MS_SCOPES = ['Calendars.Read', 'User.Read'];
+    const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
 
     const msalConfig = {
-      auth: { clientId: CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI },
+      auth: { clientId: MS_CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI },
       cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
     };
     const msalInstance = new msal.PublicClientApplication(msalConfig);
 
+    let googleTokenClient;
+    let googleAccounts = []; // { email, accessToken, expiresAt }
     let calendar;
     let allEvents = [];
     let calendarVisibility = {};
@@ -159,19 +168,68 @@
       try {
         await msalInstance.initialize();
       } catch (e) {
-        document.getElementById('status').textContent = 'MSAL init failed: ' + e.message;
-        return;
+        console.error(e);
       }
-      document.getElementById('addAccount').onclick = addAccount;
+
+      // Wait for GIS to load
+      const waitForGIS = () => new Promise(resolve => {
+        const check = () => {
+          if (window.google?.accounts?.oauth2) resolve();
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+      await waitForGIS();
+
+      googleTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: GOOGLE_SCOPES,
+        callback: (resp) => {
+          if (resp.error) {
+            alert('Google login failed: ' + resp.error);
+            return;
+          }
+          handleGoogleToken(resp);
+        }
+      });
+
+      document.getElementById('addOutlook').onclick = addOutlookAccount;
+      document.getElementById('addGoogle').onclick = () => {
+        if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('YOUR_')) {
+          alert('Set GOOGLE_CLIENT_ID in the script first.');
+          return;
+        }
+        googleTokenClient.requestAccessToken({ prompt: 'consent' });
+      };
       document.getElementById('refresh').onclick = loadAllEvents;
       document.getElementById('logout').onclick = logoutAll;
       initCalendar();
       updateUI();
-      if (msalInstance.getAllAccounts().length > 0) {
+      if (msalInstance.getAllAccounts().length > 0 || googleAccounts.length > 0) {
         loadAllEvents();
       } else {
-        document.getElementById('status').textContent = 'Ready — add an account to get started';
+        document.getElementById('status').textContent = 'Ready — add an Outlook or Google account';
       }
+    }
+
+    async function handleGoogleToken(resp) {
+      const token = resp.access_token;
+      // Get user info
+      const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const user = await userRes.json();
+      const email = user.email;
+
+      // Remove existing if re-adding
+      googleAccounts = googleAccounts.filter(a => a.email !== email);
+      googleAccounts.push({
+        email,
+        accessToken: token,
+        expiresAt: Date.now() + (resp.expires_in || 3600) * 1000
+      });
+      updateUI();
+      loadAllEvents();
     }
 
     function initCalendar() {
@@ -188,31 +246,30 @@
         eventClick: function(info) {
           const start = info.event.start ? info.event.start.toLocaleString() : '';
           const end = info.event.end ? info.event.end.toLocaleString() : '';
-          alert(`${info.event.title}\nAccount: ${info.event.extendedProps.account}\nCalendar: ${info.event.extendedProps.calendar}\n${start}${end ? ' → ' + end : ''}`);
+          alert(`${info.event.title}\n${info.event.extendedProps.provider}: ${info.event.extendedProps.account}\nCalendar: ${info.event.extendedProps.calendar}\n${start}${end ? ' → ' + end : ''}`);
         },
         eventDisplay: 'block'
       });
       calendar.render();
     }
 
-    async function addAccount() {
+    async function addOutlookAccount() {
       try {
-        await msalInstance.loginPopup({ scopes: SCOPES, prompt: 'select_account' });
+        await msalInstance.loginPopup({ scopes: MS_SCOPES, prompt: 'select_account' });
         updateUI();
         loadAllEvents();
       } catch (e) {
         console.error(e);
-        alert('Login failed: ' + (e.message || e));
+        alert('Outlook login failed: ' + (e.message || e));
       }
     }
 
     async function logoutAll() {
-      const accounts = msalInstance.getAllAccounts();
-      for (const acc of accounts) {
-        try {
-          await msalInstance.logoutPopup({ account: acc });
-        } catch (e) { console.warn(e); }
+      const msAccounts = msalInstance.getAllAccounts();
+      for (const acc of msAccounts) {
+        try { await msalInstance.logoutPopup({ account: acc }); } catch (e) { console.warn(e); }
       }
+      googleAccounts = [];
       allEvents = [];
       calendarVisibility = {};
       updateUI();
@@ -221,29 +278,39 @@
     }
 
     function updateUI() {
-      const accounts = msalInstance.getAllAccounts();
+      const msAccounts = msalInstance.getAllAccounts();
+      const total = msAccounts.length + googleAccounts.length;
       const list = document.getElementById('accountsList');
-      if (accounts.length === 0) {
-        list.innerHTML = 'No accounts signed in yet. Click <b>Add Account</b>.';
+      if (total === 0) {
+        list.innerHTML = 'No accounts signed in yet. Click <b>Add Outlook</b> or <b>Add Google</b>.';
         document.getElementById('status').textContent = 'Not signed in';
         return;
       }
-      document.getElementById('status').textContent = `${accounts.length} account(s) connected`;
+      document.getElementById('status').textContent = `${total} account(s) connected`;
     }
 
-    async function getToken(account) {
+    async function getMsToken(account) {
       try {
-        const resp = await msalInstance.acquireTokenSilent({ scopes: SCOPES, account });
+        const resp = await msalInstance.acquireTokenSilent({ scopes: MS_SCOPES, account });
         return resp.accessToken;
       } catch {
-        const resp = await msalInstance.acquireTokenPopup({ scopes: SCOPES, account, prompt: 'select_account' });
+        const resp = await msalInstance.acquireTokenPopup({ scopes: MS_SCOPES, account, prompt: 'select_account' });
         return resp.accessToken;
       }
     }
 
+    function getGoogleToken(account) {
+      if (account.expiresAt && Date.now() < account.expiresAt - 60000) {
+        return account.accessToken;
+      }
+      return null; // needs refresh via re-login for simplicity
+    }
+
     async function loadAllEvents() {
-      const accounts = msalInstance.getAllAccounts();
-      if (accounts.length === 0) return;
+      const msAccounts = msalInstance.getAllAccounts();
+      const totalAccounts = msAccounts.length + googleAccounts.length;
+      if (totalAccounts === 0) return;
+
       document.getElementById('status').textContent = 'Loading calendars...';
       allEvents = [];
       const accountsList = document.getElementById('accountsList');
@@ -253,11 +320,13 @@
       const start = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
       const end = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString();
 
-      for (let i = 0; i < accounts.length; i++) {
-        const account = accounts[i];
-        const color = colors[i % colors.length];
+      let colorIndex = 0;
+
+      // Microsoft / Outlook accounts
+      for (const account of msAccounts) {
+        const color = colors[colorIndex++ % colors.length];
         try {
-          const token = await getToken(account);
+          const token = await getMsToken(account);
           const calendarsRes = await fetch('https://graph.microsoft.com/v1.0/me/calendars', {
             headers: { Authorization: `Bearer ${token}` }
           });
@@ -267,10 +336,10 @@
 
           const accDiv = document.createElement('div');
           accDiv.className = 'account-item';
-          accDiv.innerHTML = `<strong style="color:${color}">${account.username || account.name || 'Account'}</strong>`;
+          accDiv.innerHTML = `<strong style="color:${color}">${account.username || account.name || 'Outlook'}<span class="provider-badge">(Outlook)</span></strong>`;
 
           for (const cal of calendars) {
-            const key = `${account.homeAccountId}|${cal.id}`;
+            const key = `ms|${account.homeAccountId}|${cal.id}`;
             if (calendarVisibility[key] === undefined) calendarVisibility[key] = true;
 
             const label = document.createElement('label');
@@ -291,7 +360,7 @@
               const evData = await evRes.json();
               (evData.value || []).forEach(ev => {
                 allEvents.push({
-                  id: ev.id,
+                  id: 'ms-' + ev.id,
                   title: ev.subject || '(No title)',
                   start: ev.start?.dateTime || ev.start?.date,
                   end: ev.end?.dateTime || ev.end?.date,
@@ -299,7 +368,7 @@
                   backgroundColor: color,
                   borderColor: color,
                   textColor: '#fff',
-                  extendedProps: { account: account.username, calendar: cal.name, key }
+                  extendedProps: { account: account.username, calendar: cal.name, key, provider: 'Outlook' }
                 });
               });
             }
@@ -307,10 +376,75 @@
           accountsList.appendChild(accDiv);
         } catch (e) {
           console.error(e);
-          accountsList.innerHTML += `<div class="account-item" style="color:#f87171">Error loading ${account.username || 'account'}: ${e.message}</div>`;
+          accountsList.innerHTML += `<div class="account-item" style="color:#f87171">Error loading Outlook ${account.username || 'account'}: ${e.message}</div>`;
         }
       }
-      document.getElementById('status').textContent = `Loaded ${allEvents.length} events from ${accounts.length} account(s)`;
+
+      // Google accounts
+      for (const account of googleAccounts) {
+        const color = colors[colorIndex++ % colors.length];
+        const token = getGoogleToken(account);
+        if (!token) {
+          accountsList.innerHTML += `<div class="account-item" style="color:#fbbf24">Google ${account.email}: token expired — click Add Google again to refresh</div>`;
+          continue;
+        }
+        try {
+          const calListRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!calListRes.ok) throw new Error(`Google calendarList failed: ${calListRes.status}`);
+          const calListData = await calListRes.json();
+          const calendars = calListData.items || [];
+
+          const accDiv = document.createElement('div');
+          accDiv.className = 'account-item';
+          accDiv.innerHTML = `<strong style="color:${color}">${account.email}<span class="provider-badge">(Google)</span></strong>`;
+
+          for (const cal of calendars) {
+            const key = `g|${account.email}|${cal.id}`;
+            if (calendarVisibility[key] === undefined) calendarVisibility[key] = true;
+
+            const label = document.createElement('label');
+            label.className = 'cal-toggle';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = calendarVisibility[key];
+            cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(cal.summary || cal.id));
+            accDiv.appendChild(label);
+
+            const eventsUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}&singleEvents=true&orderBy=startTime&maxResults=250`;
+            const evRes = await fetch(eventsUrl, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (evRes.ok) {
+              const evData = await evRes.json();
+              (evData.items || []).forEach(ev => {
+                const startDt = ev.start?.dateTime || ev.start?.date;
+                const endDt = ev.end?.dateTime || ev.end?.date;
+                allEvents.push({
+                  id: 'g-' + (ev.id || Math.random()),
+                  title: ev.summary || '(No title)',
+                  start: startDt,
+                  end: endDt,
+                  allDay: !!ev.start?.date && !ev.start?.dateTime,
+                  backgroundColor: color,
+                  borderColor: color,
+                  textColor: '#fff',
+                  extendedProps: { account: account.email, calendar: cal.summary || cal.id, key, provider: 'Google' }
+                });
+              });
+            }
+          }
+          accountsList.appendChild(accDiv);
+        } catch (e) {
+          console.error(e);
+          accountsList.innerHTML += `<div class="account-item" style="color:#f87171">Error loading Google ${account.email}: ${e.message}</div>`;
+        }
+      }
+
+      document.getElementById('status').textContent = `Loaded ${allEvents.length} events from ${totalAccounts} account(s)`;
       calendar.refetchEvents();
     }
 
