@@ -199,6 +199,7 @@
     // ====== CONFIG ======
     const MS_CLIENT_ID = 'YOUR_MS_CLIENT_ID_HERE'; // Azure app client ID
     const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE'; // Google Cloud OAuth client ID
+    const ICLOUD_PROXY_URL = 'YOUR_ICLOUD_PROXY_URL_HERE'; // Cloudflare Worker URL, e.g. https://calsmash-icloud.yourname.workers.dev (no trailing slash)
     const AUTHORITY = 'https://login.microsoftonline.com/common';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const MS_SCOPES = ['Calendars.Read', 'User.Read'];
@@ -282,10 +283,11 @@
         alert('Enter both Apple ID and app-specific password.');
         return;
       }
-      document.getElementById('status').textContent = 'Testing iCloud connection...';
+      const useProxy = ICLOUD_PROXY_URL && !ICLOUD_PROXY_URL.includes('YOUR_');
+      const base = useProxy ? ICLOUD_PROXY_URL.replace(/\/$/, '') + '/caldav' : 'https://caldav.icloud.com';
+      document.getElementById('status').textContent = useProxy ? 'Testing iCloud via proxy...' : 'Testing iCloud connection...';
       try {
-        // Attempt a simple PROPFIND — this will almost always fail due to CORS
-        const res = await fetch('https://caldav.icloud.com/', {
+        const res = await fetch(base + '/', {
           method: 'PROPFIND',
           headers: {
             'Authorization': 'Basic ' + btoa(email + ':' + password),
@@ -297,15 +299,19 @@
         if (res.ok) {
           icloudAccounts.push({ email, password });
           document.getElementById('icloudModal').classList.remove('show');
-          alert('Connected (rare success). Reloading events...');
+          alert(useProxy ? 'Connected via proxy.' : 'Connected.');
           loadAllEvents();
         } else {
           throw new Error('HTTP ' + res.status);
         }
       } catch (e) {
         console.error(e);
-        alert('iCloud CalDAV blocked by CORS (expected).\n\nApple does not allow direct browser access to caldav.icloud.com.\n\nOptions:\n1. Use a public shared calendar ICS link (paste below).\n2. Set up a small backend proxy (Cloudflare Worker, etc.) to forward CalDAV requests.\n\nSee the README for details.');
-        document.getElementById('status').textContent = 'iCloud direct access blocked by CORS';
+        if (!useProxy) {
+          alert('iCloud CalDAV blocked by CORS.\n\nSet ICLOUD_PROXY_URL in index.html to your Cloudflare Worker URL for full support.\n\nSee README for deploy steps.');
+        } else {
+          alert('iCloud proxy connection failed: ' + (e.message || e));
+        }
+        document.getElementById('status').textContent = useProxy ? 'iCloud proxy failed' : 'iCloud blocked by CORS';
       }
     }
 
