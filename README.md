@@ -1,12 +1,14 @@
 # CalSmash
 
-A modern, standalone web calendar viewer that unifies events from multiple **Microsoft / Outlook** and **Google Calendar** accounts into one clean FullCalendar view.
+A modern, standalone web calendar viewer that unifies events from multiple **Microsoft / Outlook**, **Google Calendar**, and (limited) **iCloud** sources into one clean FullCalendar view.
 
 **CalSmash** smashes all your calendars into a single, beautiful interface.
 
 ## Features
 - Add multiple Outlook.com, Hotmail, Microsoft 365, or work/school accounts
 - Add Google accounts (personal or Workspace)
+- iCloud UI (app-specific password) with clear CORS limitation note
+- Add public shared calendar ICS links (best-effort)
 - Fetches every calendar (primary + secondary) from each account
 - Unified month / week / day / list views with color-coding per account
 - Toggle individual calendars on/off
@@ -35,6 +37,17 @@ A modern, standalone web calendar viewer that unifies events from multiple **Mic
 8. In `index.html`, replace `YOUR_GOOGLE_CLIENT_ID_HERE` with that ID.
 9. Under OAuth consent screen, add the scope `https://www.googleapis.com/auth/calendar.readonly` (or configure as needed for testing).
 
+### iCloud Calendar (important limitation)
+Apple iCloud Calendar uses CalDAV. There is **no public OAuth API**. Access requires:
+- Your Apple ID email
+- An **app-specific password** generated at [appleid.apple.com](https://appleid.apple.com) → Sign-In and Security → App-Specific Passwords
+
+**CORS block:** Apple's `caldav.icloud.com` does not allow browser origins. Direct fetch from a pure client-side app (GitHub Pages, local static server, etc.) will fail with a CORS error. This is expected and cannot be fixed client-side.
+
+**Workarounds:**
+1. **Public shared calendars** — Share a calendar publicly in iCloud, copy the webcal/https ICS link, and paste it into the "Add Public ICS" field in the iCloud modal. (Many public ICS hosts also have CORS restrictions, so results vary.)
+2. **Backend proxy** — Deploy a small Cloudflare Worker, Vercel/Netlify function, or other proxy that forwards authenticated CalDAV requests and adds CORS headers. Then point the app at your proxy.
+
 ## Run / Deploy
 
 ### Local
@@ -49,10 +62,11 @@ In the repo Settings → Pages → Source: Deploy from branch `main` / root.
 Live URL: `https://nickatkinsbgky.github.io/CalSmash/`
 
 ## Usage
-1. Click **Add Outlook** or **Add Google** and sign in (select account each time for multiples).
-2. Events load automatically, color-coded by account, with a provider badge.
-3. Check/uncheck calendars in the sidebar.
-4. Switch views or click Refresh.
-5. Google tokens expire; re-click **Add Google** if prompted to refresh.
+1. Click **Add Outlook**, **Add Google**, or **Add iCloud**.
+2. For iCloud, enter Apple ID + app-specific password (or paste a public ICS URL).
+3. Events load automatically, color-coded by account, with a provider badge.
+4. Check/uncheck calendars in the sidebar.
+5. Switch views or click Refresh.
+6. Google tokens expire; re-click **Add Google** if prompted to refresh.
 
 Built as an improved, rebranded version of the original Outlook Unified Calendar concept, now with multi-provider support.
