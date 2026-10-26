@@ -231,6 +231,7 @@
     // ====== CONFIG ======
     const MS_CLIENT_ID = 'YOUR_MS_CLIENT_ID_HERE'; // Azure app client ID
     const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE'; // Google Cloud OAuth client ID
+    const ICLOUD_PROXY_URL = 'YOUR_ICLOUD_PROXY_URL_HERE'; // Cloudflare Worker URL (no trailing slash)
     const AUTHORITY = 'https://login.microsoftonline.com/common';
     const REDIRECT_URI = window.location.origin + window.location.pathname;
     const MS_SCOPES = ['Calendars.Read', 'User.Read'];
@@ -317,10 +318,11 @@
         alert('Enter both Apple ID and app-specific password.');
         return;
       }
-      document.getElementById('status').textContent = 'Testing iCloud connection...';
+      const useProxy = ICLOUD_PROXY_URL && !ICLOUD_PROXY_URL.includes('YOUR_');
+      const base = useProxy ? ICLOUD_PROXY_URL.replace(/\/$/, '') + '/caldav' : 'https://caldav.icloud.com';
+      document.getElementById('status').textContent = useProxy ? 'Testing iCloud via proxy...' : 'Testing iCloud...';
       try {
-        // Attempt a simple PROPFIND — this will almost always fail due to CORS
-        const res = await fetch('https://caldav.icloud.com/', {
+        const res = await fetch(base + '/', {
           method: 'PROPFIND',
           headers: {
             'Authorization': 'Basic ' + btoa(email + ':' + password),
@@ -330,21 +332,26 @@
           body: '<propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>'
         });
         if (res.ok) {
-          icloudAccounts.push({ email, password });
+          icloudAccounts = icloudAccounts.filter(a => a.email !== email);
+          icloudAccounts.push({ email, password, base });
           document.getElementById('icloudModal').classList.remove('show');
-          alert('Connected (rare success). Reloading events...');
+          alert(useProxy ? 'iCloud connected via proxy.' : 'iCloud connected.');
           loadAllEvents();
         } else {
           throw new Error('HTTP ' + res.status);
         }
       } catch (e) {
         console.error(e);
-        alert('iCloud CalDAV blocked by CORS (expected).\n\nApple does not allow direct browser access to caldav.icloud.com.\n\nOptions:\n1. Use a public shared calendar ICS link (paste below).\n2. Set up a small backend proxy (Cloudflare Worker, etc.) to forward CalDAV requests.\n\nSee the README for details.');
-        document.getElementById('status').textContent = 'iCloud direct access blocked by CORS';
+        if (!useProxy) {
+          alert('iCloud blocked by CORS. Set ICLOUD_PROXY_URL to your Cloudflare Worker for full support.');
+        } else {
+          alert('iCloud proxy failed: ' + (e.message || e));
+        }
+        document.getElementById('status').textContent = useProxy ? 'iCloud proxy failed' : 'iCloud blocked by CORS';
       }
     }
 
-    function addPublicIcs() {
+        function addPublicIcs() {
       const url = document.getElementById('icsUrl').value.trim();
       if (!url) return;
       const name = 'Public ICS: ' + url.slice(0, 40);
@@ -595,7 +602,117 @@
         }
       }
 
-      // Public ICS (best-effort; many public calendars still have CORS)
+      // iCloud accounts (via proxy)
+      for (const account of icloudAccounts) {
+        const color = colors[colorIndex++ % colors.length];
+        const base = account.base || 'https://caldav.icloud.com';
+        const auth = 'Basic ' + btoa(account.email + ':' + account.password);
+        try {
+          // Discover principal
+          const princRes = await fetch(base + '/', {
+            method: 'PROPFIND',
+            headers: { Authorization: auth, Depth: '0', 'Content-Type': 'application/xml' },
+            body: '<propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>'
+          });
+          if (!princRes.ok) throw new Error('Principal failed: ' + princRes.status);
+          const princText = await princRes.text();
+          const princMatch = princText.match(/<current-user-principal[^>]*>\s*<href[^>]*>([^<]+)<\/href>/i);
+          if (!princMatch) throw new Error('Could not parse principal');
+          const principal = princMatch[1].replace(/^https?:\/\/[^/]+/, '');
+
+          // Calendar home
+          const homeRes = await fetch(base + principal, {
+            method: 'PROPFIND',
+            headers: { Authorization: auth, Depth: '0', 'Content-Type': 'application/xml' },
+            body: '<propfind xmlns="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><prop><c:calendar-home-set/></prop></propfind>'
+          });
+          if (!homeRes.ok) throw new Error('Home failed');
+          const homeText = await homeRes.text();
+          const homeMatch = homeText.match(/<href[^>]*>([^<]*calendars[^<]*)<\/href>/i);
+          if (!homeMatch) throw new Error('Could not parse calendar home');
+          const calHome = homeMatch[1].replace(/^https?:\/\/[^/]+/, '');
+
+          // List calendars
+          const calsRes = await fetch(base + calHome, {
+            method: 'PROPFIND',
+            headers: { Authorization: auth, Depth: '1', 'Content-Type': 'application/xml' },
+            body: '<propfind xmlns="DAV:"><prop><displayname/></prop></propfind>'
+          });
+          if (!calsRes.ok) throw new Error('Calendars list failed');
+          const calsText = await calsRes.text();
+          const calMatches = [...calsText.matchAll(/<response[^>]*>[\s\S]*?<href[^>]*>([^<]+)<\/href>[\s\S]*?<displayname[^>]*>([^<]*)<\/displayname>/gi)];
+
+          const accDiv = document.createElement('div');
+          accDiv.className = 'account-item';
+          accDiv.innerHTML = `<strong style="color:${color}">${account.email}<span class="provider-badge">(iCloud)</span></strong>`;
+
+          for (const m of calMatches) {
+            const href = m[1];
+            const name = m[2] || 'Calendar';
+            if (href.endsWith('/calendars/') || href === calHome) continue;
+            const key = `icloud|${account.email}|${href}`;
+            if (calendarVisibility[key] === undefined) calendarVisibility[key] = true;
+
+            const label = document.createElement('label');
+            label.className = 'cal-toggle';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = calendarVisibility[key];
+            cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+            label.appendChild(cb);
+            label.appendChild(document.createTextNode(name));
+            accDiv.appendChild(label);
+
+            // Simple calendar-query for events
+            const reportBody = `<?xml version="1.0"?>
+<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+  <d:prop><d:getetag/><c:calendar-data/></d:prop>
+  <c:filter>
+    <c:comp-filter name="VCALENDAR">
+      <c:comp-filter name="VEVENT">
+        <c:time-range start="${start.replace(/[-:]/g,'').slice(0,15)}Z" end="${end.replace(/[-:]/g,'').slice(0,15)}Z"/>
+      </c:comp-filter>
+    </c:comp-filter>
+  </c:filter>
+</c:calendar-query>`;
+            const evRes = await fetch(base + href, {
+              method: 'REPORT',
+              headers: { Authorization: auth, Depth: '1', 'Content-Type': 'application/xml' },
+              body: reportBody
+            });
+            if (evRes.ok) {
+              const evText = await evRes.text();
+              const icsBlocks = [...evText.matchAll(/BEGIN:VCALENDAR[\s\S]*?END:VCALENDAR/g)];
+              for (const block of icsBlocks) {
+                const ics = block[0];
+                const summary = (ics.match(/SUMMARY:(.+)/) || [])[1] || '(No title)';
+                const dtstart = (ics.match(/DTSTART[^:]*:(\d{8}T?\d{0,6})/) || [])[1];
+                const dtend = (ics.match(/DTEND[^:]*:(\d{8}T?\d{0,6})/) || [])[1];
+                if (dtstart) {
+                  const toIso = (s) => s.length === 8 ? s.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3') : s.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})/, '$1-$2-$3T$4:$5:$6');
+                  allEvents.push({
+                    id: 'icloud-' + Math.random(),
+                    title: summary.trim(),
+                    start: toIso(dtstart),
+                    end: dtend ? toIso(dtend) : toIso(dtstart),
+                    allDay: dtstart.length === 8,
+                    backgroundColor: color,
+                    borderColor: color,
+                    textColor: '#fff',
+                    extendedProps: { account: account.email, calendar: name, key, provider: 'iCloud' }
+                  });
+                }
+              }
+            }
+          }
+          accountsList.appendChild(accDiv);
+        } catch (e) {
+          console.error(e);
+          accountsList.innerHTML += `<div class="account-item" style="color:#f87171">iCloud ${account.email}: ${e.message}</div>`;
+        }
+      }
+
+            // Public ICS (best-effort; many public calendars still have CORS)
       for (const ics of publicIcs) {
         const color = colors[colorIndex++ % colors.length];
         const key = `ics|${ics.url}`;
