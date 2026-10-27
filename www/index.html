@@ -1,1 +1,896 @@
-FROM_LOCAL_FILE
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>CalSmash</title>
+  <meta name="description" content="Smash all your Outlook, Google, and iCloud calendars into one unified view">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="manifest.json">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #05070d;
+      --glass: rgba(10, 15, 30, 0.45);
+      --glass-strong: rgba(15, 23, 42, 0.65);
+      --glass-border: rgba(148, 163, 184, 0.35);
+      --glass-highlight: rgba(255, 255, 255, 0.12);
+      --primary: #3b82f6;
+      --primary-hover: #60a5fa;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #1e3a8a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: var(--text);
+      min-height: 100dvh; padding-bottom: env(safe-area-inset-bottom);
+      background: 
+        radial-gradient(ellipse 80% 50% at 10% 20%, rgba(59, 130, 246, 0.25), transparent 50%),
+        radial-gradient(ellipse 60% 40% at 90% 80%, rgba(30, 41, 59, 0.4), transparent 50%),
+        linear-gradient(160deg, #020617 0%, #0f172a 30%, #1e293b 55%, #0f172a 80%, #020617 100%);
+      background-attachment: fixed;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: 
+        linear-gradient(135deg, rgba(59,130,246,0.08) 0%, transparent 40%, rgba(148,163,184,0.06) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    header, #sidebar, #calendar, .account-item, .modal-content, .status, button, select, .controls {
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 var(--glass-highlight),
+        inset 0 -1px 0 rgba(0,0,0,0.2);
+    }
+    header {
+      position: relative;
+      z-index: 10;
+      color: white;
+      padding: max(12px, env(safe-area-inset-top)) 12px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      border-radius: 0 0 16px 16px;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      background: var(--glass-strong);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+      background: linear-gradient(90deg, #93c5fd, #60a5fa, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+    .controls { 
+      display: flex; 
+      gap: 6px; 
+      flex-wrap: wrap; 
+      align-items: center;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+    button {
+      background: linear-gradient(180deg, rgba(59,130,246,0.75), rgba(30,58,138,0.85));
+      color: white;
+      border: 1px solid rgba(147,197,253,0.45);
+      padding: 6px 10px; font-size: 0.85rem;
+      border-radius: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 16px rgba(59,130,246,0.25), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    button:hover { 
+      background: linear-gradient(180deg, #60a5fa, #3b82f6); 
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    button.secondary {
+      background: rgba(30,41,59,0.5);
+      color: var(--text);
+      border: 1px solid var(--glass-border);
+      box-shadow: inset 0 1px 0 var(--glass-highlight);
+    }
+    button.secondary:hover { background: rgba(51,65,85,0.7); }
+    button.google { background: linear-gradient(180deg, rgba(239,68,68,0.8), rgba(185,28,28,0.9)); border-color: rgba(252,165,165,0.5); }
+    button.icloud { background: linear-gradient(180deg, rgba(14,165,233,0.8), rgba(2,132,199,0.9)); border-color: rgba(125,211,252,0.5); }
+    #viewSelect {
+      background: rgba(15,23,42,0.75);
+      color: var(--text);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-weight: 600;
+      min-width: 120px;
+      box-shadow: inset 0 1px 0 var(--glass-highlight);
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: 24px;
+    }
+    #sidebar {
+      width: 340px;
+      padding: 18px;
+      border-right: 1px solid var(--glass-border);
+      overflow-y: auto;
+      position: relative;
+      z-index: 5;
+      background: var(--glass-strong);
+    }
+    #layout { display: flex; height: calc(100dvh - 120px - env(safe-area-inset-top)); position: relative; z-index: 1; }
+    #calendar-container { flex: 1; padding: 8px; overflow: auto; }
+    #calendar {
+      border-radius: 20px;
+      padding: 16px;
+      min-height: 600px;
+      background: var(--glass);
+    }
+    .account-item {
+      margin-bottom: 8px;
+      padding: 10px;
+      border-radius: 16px;
+      background: rgba(15,23,42,0.4);
+    }
+    .account-item strong { display: block; margin-bottom: 8px; font-size: 0.95rem; }
+    .provider-badge { font-size: 0.75rem; opacity: 0.85; margin-left: 6px; }
+    .cal-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      margin: 6px 0;
+      color: var(--text);
+    }
+    .cal-toggle input { accent-color: #3b82f6; }
+    .status {
+      font-size: 0.85rem;
+      color: var(--muted);
+      padding: 10px 20px;
+      margin: 0 16px;
+      border-radius: 12px;
+      position: relative;
+      z-index: 5;
+      background: var(--glass);
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(2,6,23,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+    }
+    .modal.show { display: flex; }
+    .modal-content {
+      padding: 28px;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 440px;
+      background: var(--glass-strong);
+    }
+    .modal-content h3 { margin-top: 0; }
+    .modal-content input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border);
+      background: rgba(15,23,42,0.5);
+      color: var(--text);
+      backdrop-filter: blur(8px);
+    }
+    .fc { color: var(--text); }
+    .fc .fc-button { 
+      background: rgba(59,130,246,0.7) !important; 
+      border: 1px solid rgba(147,197,253,0.4) !important; 
+      border-radius: 10px !important;
+      backdrop-filter: blur(8px);
+    }
+    .fc .fc-button-active { background: #3b82f6 !important; }
+    .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(148,163,184,0.15) !important; }
+    .fc .fc-daygrid-day-number, .fc .fc-col-header-cell-cushion { color: var(--text) !important; }
+    .fc .fc-scrollgrid, .fc .fc-daygrid-body, .fc .fc-timegrid-body { background: transparent !important; }
+    .fc .fc-toolbar-title { color: var(--text) !important; font-weight: 600; }
+
+    /* Condense all-day events to a single line */
+    .fc-event.fc-event-allday,
+    .fc-timegrid-allday .fc-event,
+    .fc-daygrid-event.fc-event-allday {
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      font-size: 0.75rem !important;
+      line-height: 1.2 !important;
+      padding: 1px 4px !important;
+      min-height: 1.2em !important;
+      max-height: 1.4em !important;
+      height: 1.3em !important;
+    }
+    .fc-timegrid-allday {
+      min-height: 1.6em;
+    }
+    .fc-timegrid-allday .fc-timegrid-event-harness {
+      height: 1.4em !important;
+    }
+    .fc-event-title {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Completely suppress FullCalendar's own toolbar and view buttons */
+    .fc .fc-header-toolbar,
+    .fc .fc-toolbar,
+    .fc .fc-toolbar-chunk,
+    .fc .fc-button-group,
+    .fc .fc-dayGridMonth-button,
+    .fc .fc-timeGridWeek-button,
+    .fc .fc-timeGridDay-button,
+    .fc .fc-listMonth-button,
+    .fc .fc-listWeek-button,
+    .fc .fc-listDay-button,
+    .fc .fc-multiMonthYear-button,
+    .fc .fc-dayGridWeek-button,
+    .fc .fc-timeGridThreeDay-button { display: none !important; }
+    #viewMenu { display: none !important; position: absolute; }
+    #viewMenu.show { display: block !important; }
+
+    @media (max-width: 800px) {
+      #layout { flex-direction: column; height: auto; min-height: calc(100dvh - 140px); }
+      #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--glass-border); max-height: 200px; }
+      header { padding: max(16px, env(safe-area-inset-top)) 8px 8px; }
+      .controls { gap: 4px; }
+      button { padding: 5px 8px; font-size: 0.75rem; }
+      #viewSelect { min-width: 90px; font-size: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CalSmash</h1>
+    <div class="controls">
+      <button id="loadDevice" style="background:linear-gradient(180deg,#22c55e,#16a34a);">Load Calendars</button>
+      <button id="calPrev" class="secondary" style="padding:6px 10px;">‹</button>
+      <button id="calNext" class="secondary" style="padding:6px 10px;">›</button>
+      <button id="calToday" class="secondary" style="padding:6px 10px; font-size:0.75rem;">Today</button>
+      <select id="viewSelect" title="Calendar view" style="min-width:110px; padding:6px 10px; border-radius:10px; background:rgba(15,23,42,0.75); color:var(--text); border:1px solid var(--glass-border); font-weight:600;">
+        <option value="dayGridMonth">Month</option>
+        <option value="timeGridWeek">Week</option>
+        <option value="timeGridDay">Day</option>
+        <option value="listWeek">List</option>
+        <option value="multiMonthYear">Year</option>
+        <option value="dayGridWeek">Week Grid</option>
+        <option value="timeGridThreeDay">3-Day</option>
+      </select>
+      <button id="refresh" style="background:linear-gradient(180deg,#22c55e,#16a34a);">Refresh</button>
+      <details style="position:relative;">
+        <summary style="list-style:none; cursor:pointer; padding:6px 10px; border-radius:10px; background:rgba(30,41,59,0.5); border:1px solid var(--glass-border); font-size:0.8rem;">More</summary>
+        <div style="position:absolute; right:0; top:100%; margin-top:4px; background:var(--glass-strong); border:1px solid var(--glass-border); border-radius:12px; padding:8px; z-index:20; min-width:140px;">
+          <button id="addOutlook" class="secondary" style="width:100%; margin:2px 0; font-size:0.75rem;">Add Outlook</button>
+          <button id="addGoogle" class="google" style="width:100%; margin:2px 0; font-size:0.75rem;">Add Google</button>
+          <button id="addICloud" class="icloud" style="width:100%; margin:2px 0; font-size:0.75rem;">Add iCloud</button>
+          <button id="logout" class="secondary" style="width:100%; margin:2px 0; font-size:0.75rem;">Sign Out All</button>
+        </div>
+      </details>
+    </div>
+  </header>
+  <div class="status" id="status">Initializing...</div>
+  <div id="layout">
+    <aside id="sidebar">
+      <h3 style="margin-top:0; color: #60a5fa;">Accounts & Calendars</h3>
+      <div id="accountsList">No accounts signed in yet. Click <b>Add Outlook</b>, <b>Add Google</b>, or <b>Add iCloud</b>.</div>
+    </aside>
+    <div id="calendar-container">
+      <div id="calendar"></div>
+    </div>
+  </div>
+
+  <!-- iCloud Modal -->
+  <div id="icloudModal" class="modal">
+    <div class="modal-content">
+      <h3>Add iCloud Calendar</h3>
+      <p>Apple requires an <strong>app-specific password</strong> (not your Apple ID password). Generate one at <a href="https://appleid.apple.com" target="_blank" style="color:#60a5fa">appleid.apple.com</a> → Sign-In and Security → App-Specific Passwords.</p>
+      <input type="email" id="icloudEmail" placeholder="Apple ID / iCloud email" />
+      <input type="password" id="icloudPassword" placeholder="App-specific password (xxxx-xxxx-xxxx-xxxx)" />
+      <div class="buttons">
+        <button id="icloudConnect">Connect</button>
+        <button id="icloudCancel" class="secondary">Cancel</button>
+      </div>
+      <div class="note">
+        <strong>Note:</strong> Direct browser access to iCloud CalDAV is blocked by Apple's CORS policy. Full private calendar support requires a backend proxy. You can still add <strong>public shared calendars</strong> via an ICS URL below.
+      </div>
+      <hr style="border-color:var(--border); margin:16px 0">
+      <h4 style="margin:0 0 8px">Or add a public ICS link</h4>
+      <input type="url" id="icsUrl" placeholder="https://...ics or webcal://... (public shared calendar)" />
+      <button id="addIcs" style="margin-top:8px">Add Public ICS</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.27.0/lib/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    // ====== CONFIG ======
+    const MS_CLIENT_ID = 'YOUR_MS_CLIENT_ID_HERE'; // Azure app client ID
+    const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE'; // Google Cloud OAuth client ID
+    const AUTHORITY = 'https://login.microsoftonline.com/common';
+    const REDIRECT_URI = window.location.origin + window.location.pathname;
+    const MS_SCOPES = ['Calendars.Read', 'User.Read'];
+    const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/calendar.readonly';
+
+    const msalConfig = {
+      auth: { clientId: MS_CLIENT_ID, authority: AUTHORITY, redirectUri: REDIRECT_URI },
+      cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: false }
+    };
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+
+    let googleTokenClient;
+    let googleAccounts = []; // { email, accessToken, expiresAt }
+    let icloudAccounts = []; // { email, password } — stored only in memory for this session
+    let publicIcs = []; // { name, url }
+    let calendar;
+    let allEvents = [];
+    let calendarVisibility = {};
+    let localCalendars = []; // device calendars from Outlook app etc.
+
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316'];
+
+    function isNative() {
+      return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    }
+
+    async function loadLocalCalendars() {
+      const status = document.getElementById('status');
+      if (!isNative()) {
+        status.textContent = 'Not running as native Android app — device calendars unavailable';
+        return [];
+      }
+      try {
+        let Calendar = null;
+        // Try multiple ways to get the plugin
+        if (window.Capacitor?.Plugins?.Calendar) {
+          Calendar = window.Capacitor.Plugins.Calendar;
+        }
+        if (!Calendar && window.Capacitor?.registerPlugin) {
+          try { Calendar = window.Capacitor.registerPlugin('Calendar'); } catch (_) {}
+        }
+        if (!Calendar) {
+          const keys = window.Capacitor?.Plugins ? Object.keys(window.Capacitor.Plugins).join(', ') : 'none';
+          status.textContent = 'Calendar plugin missing. Plugins: ' + keys + '. Check that @capacitor/calendar is installed and synced.';
+          return [];
+        }
+        status.textContent = 'Requesting calendar access...';
+        // Request first (some devices need this before getPermissions works)
+        try {
+          await Calendar.requestPermissions({ permissions: ['readCalendar', 'writeCalendar'] });
+        } catch (e) {
+          console.warn('requestPermissions', e);
+        }
+        let perms = {};
+        try { perms = await Calendar.getPermissions(); } catch (_) {}
+        if (perms.readCalendar && perms.readCalendar !== 'granted') {
+          status.textContent = 'Calendar permission not granted. Enable it in Settings → Apps → CalSmash → Permissions.';
+          return [];
+        }
+        status.textContent = 'Loading calendars from device...';
+        const result = await Calendar.listCalendars();
+        const cals = result?.calendars || result?.result || result || [];
+        localCalendars = Array.isArray(cals) ? cals : [];
+        status.textContent = localCalendars.length
+          ? `Found ${localCalendars.length} calendar(s): ` + localCalendars.map(c => c.displayName || c.name || c.id).join(', ')
+          : 'No device calendars returned. Ensure Outlook/Google Calendar has synced to the system calendar.';
+        return localCalendars;
+      } catch (e) {
+        console.error('loadLocalCalendars', e);
+        status.textContent = 'Calendar load error: ' + (e.message || String(e));
+        return [];
+      }
+    }
+
+    async function init() {
+      try {
+        await msalInstance.initialize();
+      } catch (e) {
+        console.error(e);
+      }
+
+      const waitForGIS = () => new Promise(resolve => {
+        const check = () => {
+          if (window.google?.accounts?.oauth2) resolve();
+          else setTimeout(check, 100);
+        };
+        check();
+      });
+      await waitForGIS();
+
+      googleTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: GOOGLE_SCOPES,
+        callback: (resp) => {
+          if (resp.error) {
+            alert('Google login failed: ' + resp.error);
+            return;
+          }
+          handleGoogleToken(resp);
+        }
+      });
+
+      document.getElementById('loadDevice').onclick = async () => {
+        document.getElementById('status').textContent = 'Loading device calendars...';
+        const cals = await loadLocalCalendars();
+        if (cals.length > 0) {
+          await loadAllEvents();
+        } else if (isNative()) {
+          document.getElementById('status').textContent = 'No device calendars found. Make sure Outlook app is installed and calendars are synced, then grant permission.';
+        }
+      };
+      document.getElementById('addOutlook').onclick = addOutlookAccount;
+      document.getElementById('addGoogle').onclick = () => {
+        if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('YOUR_')) {
+          alert('Set GOOGLE_CLIENT_ID in index.html first.\n\nSee README for Google Cloud setup.');
+          document.getElementById('status').textContent = 'Google: Client ID not set';
+          return;
+        }
+        document.getElementById('status').textContent = 'Opening Google login...';
+        try {
+          googleTokenClient.requestAccessToken({ prompt: 'consent' });
+        } catch (e) {
+          alert('Google login error: ' + (e.message || e));
+          document.getElementById('status').textContent = 'Google login failed';
+        }
+      };
+      document.getElementById('addICloud').onclick = () => {
+        document.getElementById('status').textContent = 'Opening iCloud options...';
+        document.getElementById('icloudModal').classList.add('show');
+      };
+      document.getElementById('icloudCancel').onclick = () => {
+        document.getElementById('icloudModal').classList.remove('show');
+      };
+      document.getElementById('icloudConnect').onclick = tryICloudConnect;
+      document.getElementById('addIcs').onclick = addPublicIcs;
+      document.getElementById('viewSelect').onchange = (e) => {
+        if (calendar) calendar.changeView(e.target.value);
+      };
+      document.getElementById('refresh').onclick = async () => {
+        const btn = document.getElementById('refresh');
+        const original = btn.textContent;
+        btn.textContent = 'Refreshing...';
+        btn.disabled = true;
+        document.getElementById('status').textContent = 'Pulling latest events...';
+        try {
+          await loadAllEvents();
+          document.getElementById('status').textContent = 'Updated just now';
+        } catch (e) {
+          console.error(e);
+          document.getElementById('status').textContent = 'Refresh failed';
+        } finally {
+          btn.textContent = original;
+          btn.disabled = false;
+        }
+      };
+      document.getElementById('logout').onclick = logoutAll;
+      initCalendar();
+      updateUI();
+      if (msalInstance.getAllAccounts().length > 0 || googleAccounts.length > 0 || icloudAccounts.length > 0 || publicIcs.length > 0 || localCalendars.length > 0) {
+        loadAllEvents();
+      } else {
+        document.getElementById('status').textContent = 'Ready — add an Outlook, Google, or iCloud account, or load device calendars';
+      }
+    }
+
+    async function tryICloudConnect() {
+      const email = document.getElementById('icloudEmail').value.trim();
+      const password = document.getElementById('icloudPassword').value.trim();
+      if (!email || !password) {
+        alert('Enter both Apple ID and app-specific password.');
+        return;
+      }
+      document.getElementById('status').textContent = 'Testing iCloud connection...';
+      try {
+        const res = await fetch('https://caldav.icloud.com/', {
+          method: 'PROPFIND',
+          headers: {
+            'Authorization': 'Basic ' + btoa(email + ':' + password),
+            'Depth': '0',
+            'Content-Type': 'application/xml'
+          },
+          body: '<propfind xmlns="DAV:"><prop><current-user-principal/></prop></propfind>'
+        });
+        if (res.ok) {
+          icloudAccounts.push({ email, password });
+          document.getElementById('icloudModal').classList.remove('show');
+          alert('Connected (rare success). Reloading events...');
+          loadAllEvents();
+        } else {
+          throw new Error('HTTP ' + res.status);
+        }
+      } catch (e) {
+        console.error(e);
+        alert('iCloud CalDAV blocked by CORS (expected).\n\nApple does not allow direct browser access to caldav.icloud.com.\n\nOptions:\n1. Use a public shared calendar ICS link (paste below).\n2. Set up a small backend proxy (Cloudflare Worker, etc.) to forward CalDAV requests.\n\nSee the README for details.');
+        document.getElementById('status').textContent = 'iCloud direct access blocked by CORS';
+      }
+    }
+
+    function addPublicIcs() {
+      const url = document.getElementById('icsUrl').value.trim();
+      if (!url) return;
+      const name = 'Public ICS: ' + url.slice(0, 40);
+      publicIcs.push({ name, url });
+      document.getElementById('icsUrl').value = '';
+      document.getElementById('icloudModal').classList.remove('show');
+      loadAllEvents();
+    }
+
+    async function handleGoogleToken(resp) {
+      const token = resp.access_token;
+      const userRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const user = await userRes.json();
+      const email = user.email;
+      googleAccounts = googleAccounts.filter(a => a.email !== email);
+      googleAccounts.push({
+        email,
+        accessToken: token,
+        expiresAt: Date.now() + (resp.expires_in || 3600) * 1000
+      });
+      updateUI();
+      loadAllEvents();
+    }
+
+    function initCalendar() {
+      const el = document.getElementById('calendar');
+      calendar = new FullCalendar.Calendar(el, {
+        initialView: 'dayGridMonth',
+        headerToolbar: false,
+        views: {
+          multiMonthYear: { type: 'multiMonth', duration: { months: 12 }, buttonText: 'Year' },
+          listMonth: { buttonText: 'List Month' },
+          listWeek: { buttonText: 'List Week' },
+          listDay: { buttonText: 'List Day' },
+          dayGridWeek: { type: 'dayGrid', duration: { weeks: 1 }, buttonText: 'Week Grid' },
+          timeGridThreeDay: { type: 'timeGrid', duration: { days: 3 }, buttonText: '3-Day' }
+        },
+        height: 'auto',
+        themeSystem: 'standard',
+        events: function(info, successCallback) {
+          const filtered = allEvents.filter(e => calendarVisibility[e.extendedProps.key] !== false);
+          successCallback(filtered);
+        },
+        eventClick: function(info) {
+          const start = info.event.start ? info.event.start.toLocaleString() : '';
+          const end = info.event.end ? info.event.end.toLocaleString() : '';
+          alert(`${info.event.title}\n${info.event.extendedProps.provider}: ${info.event.extendedProps.account}\nCalendar: ${info.event.extendedProps.calendar}\n${start}${end ? ' → ' + end : ''}`);
+        },
+        eventDisplay: 'block',
+        eventDidMount: function(info) {
+          if (info.event.allDay) {
+            const el = info.el;
+            el.style.whiteSpace = 'nowrap';
+            el.style.overflow = 'hidden';
+            el.style.textOverflow = 'ellipsis';
+            el.style.fontSize = '0.75rem';
+            el.style.lineHeight = '1.2';
+            el.style.padding = '1px 4px';
+            el.style.height = '1.3em';
+            el.style.maxHeight = '1.4em';
+            const title = el.querySelector('.fc-event-title');
+            if (title) {
+              title.style.whiteSpace = 'nowrap';
+              title.style.overflow = 'hidden';
+              title.style.textOverflow = 'ellipsis';
+            }
+          }
+        }
+      });
+      calendar.render();
+      // Hard-remove any view buttons FullCalendar still injects
+      setTimeout(() => {
+        document.querySelectorAll('.fc .fc-toolbar-chunk:last-child, .fc .fc-button-group').forEach(el => el.remove());
+        document.querySelectorAll('.fc [class*="-button"]').forEach(btn => {
+          const cls = btn.className || '';
+          if (!cls.includes('prev') && !cls.includes('next') && !cls.includes('today')) {
+            btn.remove();
+          }
+        });
+      }, 100);
+    }
+
+    // Navigation buttons
+    document.getElementById('calPrev').onclick = () => calendar && calendar.prev();
+    document.getElementById('calNext').onclick = () => calendar && calendar.next();
+    document.getElementById('calToday').onclick = () => calendar && calendar.today();
+
+    async function addOutlookAccount() {
+      if (!MS_CLIENT_ID || MS_CLIENT_ID.includes('YOUR_')) {
+        alert('Set MS_CLIENT_ID in index.html first.\n\nSee README for Azure app registration steps.');
+        document.getElementById('status').textContent = 'Outlook: Client ID not set';
+        return;
+      }
+      document.getElementById('status').textContent = 'Opening Outlook login...';
+      try {
+        await msalInstance.loginPopup({ scopes: MS_SCOPES, prompt: 'select_account' });
+        document.getElementById('status').textContent = 'Outlook account added';
+        updateUI();
+        loadAllEvents();
+      } catch (e) {
+        console.error(e);
+        const msg = e.message || String(e);
+        alert('Outlook login failed:\n' + msg + '\n\nIn the APK, popups can be limited. Try the web version or check client ID / redirect URI.');
+        document.getElementById('status').textContent = 'Outlook login failed';
+      }
+    }
+
+    async function logoutAll() {
+      const msAccounts = msalInstance.getAllAccounts();
+      for (const acc of msAccounts) {
+        try { await msalInstance.logoutPopup({ account: acc }); } catch (e) { console.warn(e); }
+      }
+      googleAccounts = [];
+      icloudAccounts = [];
+      publicIcs = [];
+      allEvents = [];
+      calendarVisibility = {};
+      localCalendars = [];
+      updateUI();
+      calendar.refetchEvents();
+      document.getElementById('status').textContent = 'Signed out of all accounts';
+    }
+
+    async function loadAllEvents() {
+      allEvents = [];
+      calendarVisibility = {};
+      const accountsList = document.getElementById('accountsList');
+      accountsList.innerHTML = '';
+      let colorIndex = 0;
+      let hasLocal = false;
+
+      // Device calendars (Outlook app etc.)
+      if (localCalendars.length > 0 && isNative()) {
+        hasLocal = true;
+        const color = colors[colorIndex++ % colors.length];
+        const key = 'device-local';
+        calendarVisibility[key] = true;
+
+        const accDiv = document.createElement('div');
+        accDiv.className = 'account-item';
+        accDiv.innerHTML = `<strong>Device Calendars<span class="provider-badge">(Local)</span></strong>`;
+        const label = document.createElement('label');
+        label.className = 'cal-toggle';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode('All device calendars'));
+        accDiv.appendChild(label);
+        accountsList.appendChild(accDiv);
+
+        try {
+          let Calendar = window.Capacitor?.Plugins?.Calendar;
+          if (!Calendar && window.Capacitor?.registerPlugin) {
+            try { Calendar = window.Capacitor.registerPlugin('Calendar'); } catch (_) {}
+          }
+          if (Calendar) {
+            const now = new Date();
+            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const end = new Date(now.getFullYear(), now.getMonth() + 3, 0);
+            const result = await Calendar.findEvents({
+              startDate: start.toISOString(),
+              endDate: end.toISOString()
+            });
+            const events = result?.events || result?.result || result || [];
+            (Array.isArray(events) ? events : []).forEach(ev => {
+              allEvents.push({
+                id: 'local-' + (ev.id || Math.random()),
+                title: ev.title || ev.summary || '(No title)',
+                start: ev.startDate || ev.start,
+                end: ev.endDate || ev.end,
+                allDay: !!ev.allDay || !!ev.isAllDay,
+                backgroundColor: color,
+                borderColor: color,
+                textColor: '#fff',
+                extendedProps: { account: 'Device', calendar: ev.calendarName || ev.calendar || 'Local', key, provider: 'Device' }
+              });
+            });
+          }
+        } catch (e) {
+          console.error('Local events load error', e);
+          accountsList.innerHTML += `<div class="account-item" style="color:#fbbf24">Device calendars: ${e.message || e}</div>`;
+        }
+      }
+
+      // Microsoft / Outlook
+      const msAccounts = msalInstance.getAllAccounts();
+      for (const account of msAccounts) {
+        const color = colors[colorIndex++ % colors.length];
+        const key = 'ms-' + account.username;
+        calendarVisibility[key] = true;
+
+        const accDiv = document.createElement('div');
+        accDiv.className = 'account-item';
+        accDiv.innerHTML = `<strong>${account.username}<span class="provider-badge">(Outlook)</span></strong>`;
+        const label = document.createElement('label');
+        label.className = 'cal-toggle';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode('All calendars'));
+        accDiv.appendChild(label);
+        accountsList.appendChild(accDiv);
+
+        try {
+          const tokenResponse = await msalInstance.acquireTokenSilent({ account, scopes: MS_SCOPES });
+          const token = tokenResponse.accessToken;
+          const start = new Date(); start.setMonth(start.getMonth() - 1);
+          const end = new Date(); end.setMonth(end.getMonth() + 3);
+          const calRes = await fetch('https://graph.microsoft.com/v1.0/me/calendars', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const cals = await calRes.json();
+          for (const cal of (cals.value || [])) {
+            const eventsRes = await fetch(`https://graph.microsoft.com/v1.0/me/calendars/${cal.id}/events?$top=100&$orderby=start/dateTime&startDateTime=${start.toISOString()}&endDateTime=${end.toISOString()}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            const evData = await eventsRes.json();
+            (evData.value || []).forEach(ev => {
+              allEvents.push({
+                id: 'ms-' + ev.id,
+                title: ev.subject || '(No title)',
+                start: ev.start?.dateTime || ev.start?.date,
+                end: ev.end?.dateTime || ev.end?.date,
+                allDay: !!ev.isAllDay,
+                backgroundColor: color,
+                borderColor: color,
+                textColor: '#fff',
+                extendedProps: { account: account.username, calendar: cal.name, key, provider: 'Outlook' }
+              });
+            });
+          }
+        } catch (e) {
+          console.error('MS load error', e);
+          accountsList.innerHTML += `<div class="account-item" style="color:#fbbf24">Outlook ${account.username}: token error, try re-adding</div>`;
+        }
+      }
+
+      // Google
+      for (const g of googleAccounts) {
+        const color = colors[colorIndex++ % colors.length];
+        const key = 'google-' + g.email;
+        calendarVisibility[key] = true;
+
+        const accDiv = document.createElement('div');
+        accDiv.className = 'account-item';
+        accDiv.innerHTML = `<strong>${g.email}<span class="provider-badge">(Google)</span></strong>`;
+        const label = document.createElement('label');
+        label.className = 'cal-toggle';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = true;
+        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode('All calendars'));
+        accDiv.appendChild(label);
+        accountsList.appendChild(accDiv);
+
+        try {
+          const calRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
+            headers: { Authorization: `Bearer ${g.accessToken}` }
+          });
+          const cals = await calRes.json();
+          for (const cal of (cals.items || [])) {
+            const eventsRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?maxResults=100&timeMin=${new Date(Date.now()-30*86400000).toISOString()}&timeMax=${new Date(Date.now()+90*86400000).toISOString()}&singleEvents=true&orderBy=startTime`, {
+              headers: { Authorization: `Bearer ${g.accessToken}` }
+            });
+            const evData = await eventsRes.json();
+            (evData.items || []).forEach(ev => {
+              allEvents.push({
+                id: 'g-' + (ev.id || Math.random()),
+                title: ev.summary || '(No title)',
+                start: ev.start?.dateTime || ev.start?.date,
+                end: ev.end?.dateTime || ev.end?.date,
+                allDay: !!ev.start?.date && !ev.start?.dateTime,
+                backgroundColor: color,
+                borderColor: color,
+                textColor: '#fff',
+                extendedProps: { account: g.email, calendar: cal.summary, key, provider: 'Google' }
+              });
+            });
+          }
+        } catch (e) {
+          console.error('Google load error', e);
+        }
+      }
+
+      // Public ICS
+      for (const ics of publicIcs) {
+        const color = colors[colorIndex++ % colors.length];
+        const key = 'ics-' + ics.url;
+        calendarVisibility[key] = true;
+
+        const accDiv = document.createElement('div');
+        accDiv.className = 'account-item';
+        accDiv.innerHTML = `<strong>${ics.name}<span class="provider-badge">(ICS)</span></strong>`;
+        const label = document.createElement('label');
+        label.className = 'cal-toggle';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = calendarVisibility[key];
+        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode('Public calendar'));
+        accDiv.appendChild(label);
+        accountsList.appendChild(accDiv);
+
+        try {
+          const res = await fetch(ics.url.replace('webcal://', 'https://'));
+          if (res.ok) {
+            const text = await res.text();
+            const lines = text.split(/\r?\n/);
+            let inEvent = false, title = '', start = '', end = '';
+            for (const line of lines) {
+              if (line.startsWith('BEGIN:VEVENT')) { inEvent = true; title = start = end = ''; }
+              else if (line.startsWith('END:VEVENT') && inEvent) {
+                if (start) {
+                  allEvents.push({
+                    id: 'ics-' + Math.random(),
+                    title: title || '(No title)',
+                    start,
+                    end: end || start,
+                    allDay: start.length === 8,
+                    backgroundColor: color,
+                    borderColor: color,
+                    textColor: '#fff',
+                    extendedProps: { account: ics.name, calendar: 'Public ICS', key, provider: 'ICS' }
+                  });
+                }
+                inEvent = false;
+              } else if (inEvent) {
+                if (line.startsWith('SUMMARY:')) title = line.slice(8);
+                if (line.startsWith('DTSTART')) start = line.split(':')[1]?.replace(/T.*Z?/, '') || '';
+                if (line.startsWith('DTEND')) end = line.split(':')[1]?.replace(/T.*Z?/, '') || '';
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('ICS fetch failed (CORS or network):', e);
+          accountsList.innerHTML += `<div class="account-item" style="color:#fbbf24">ICS ${ics.name}: could not fetch (CORS or invalid URL)</div>`;
+        }
+      }
+
+      document.getElementById('status').textContent = `Loaded ${allEvents.length} events from ${hasLocal ? 'device + ' : ''}${msAccounts.length + googleAccounts.length + icloudAccounts.length + publicIcs.length} source(s)`;
+      calendar.refetchEvents();
+    }
+
+    function updateUI() {
+      // placeholder
+    }
+
+    init();
+  </script>
+</body>
+</html>
