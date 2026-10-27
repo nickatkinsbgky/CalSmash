@@ -201,6 +201,32 @@
     .fc .fc-list-day:hover {
       background: #111 !important;
     }
+    /* List view: force wrap to screen width, no horizontal scroll */
+    .fc-list,
+    .fc-list-table,
+    .fc-list-event,
+    .fc-list-event-title,
+    .fc-list-event-time {
+      width: 100% !important;
+      max-width: 100% !important;
+      overflow: hidden !important;
+      white-space: normal !important;
+      word-wrap: break-word !important;
+      word-break: break-word !important;
+      overflow-wrap: anywhere !important;
+    }
+    .fc-list-event-title {
+      white-space: normal !important;
+      overflow: visible !important;
+    }
+    .fc-list .fc-scroller,
+    .fc .fc-scroller {
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+    }
+    .fc-list-table {
+      table-layout: fixed !important;
+    }
     .fc .fc-scrollgrid, .fc .fc-daygrid-body, .fc .fc-timegrid-body { background: transparent !important; }
     .fc .fc-toolbar-title { color: #60a5fa !important; font-weight: 900 !important; font-size: 1.4rem; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 
@@ -303,7 +329,7 @@
         <option value="dayGridMonth">Month</option>
         <option value="timeGridWeek">Week</option>
         <option value="timeGridDay">Day</option>
-        <option value="listMonth">List</option>
+        <option value="listMonth" selected>List</option>
         <option value="multiMonthYear">Year</option>
       </select>
       <button id="refresh" style="background:linear-gradient(180deg,#22c55e,#16a34a);border-color:rgba(134,239,172,0.5);">Refresh</button>
@@ -377,10 +403,12 @@
         console.error(e);
       }
 
-      const waitForGIS = () => new Promise(resolve => {
+      const waitForGIS = () => new Promise((resolve) => {
+        const start = Date.now();
         const check = () => {
-          if (window.google?.accounts?.oauth2) resolve();
-          else setTimeout(check, 100);
+          if (window.google?.accounts?.oauth2) return resolve();
+          if (Date.now() - start > 5000) return resolve();
+          setTimeout(check, 100);
         };
         check();
       });
@@ -526,7 +554,7 @@
     function initCalendar() {
       const el = document.getElementById('calendar');
       calendar = new FullCalendar.Calendar(el, {
-        initialView: 'dayGridMonth',
+        initialView: 'listMonth',
         initialDate: new Date(),
         headerToolbar: {
           left: 'prev,next today',
@@ -815,3 +843,4 @@
   </script>
 </body>
 </html>
+
