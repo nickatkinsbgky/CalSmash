@@ -119,6 +119,7 @@
       padding-right: 24px;
     }
     #sidebar {
+      display: none !important; /* Hidden as requested - not needed in app view */
       width: 340px;
       padding: 18px;
       border-right: 1px solid var(--glass-border);
@@ -127,12 +128,13 @@
       z-index: 5;
       background: var(--glass-strong);
     }
-    #layout { display: flex; height: calc(100dvh - 120px - env(safe-area-inset-top)); position: relative; z-index: 1; }
-    #calendar-container { flex: 1; padding: 8px; overflow: auto; }
+    #layout { display: flex; height: calc(100dvh - 110px - env(safe-area-inset-top)); min-height: 0; position: relative; z-index: 1; }
+    #calendar-container { flex: 1; padding: 4px; overflow: auto; min-height: 0; }
     #calendar {
       border-radius: 20px;
-      padding: 16px;
-      min-height: 600px;
+      padding: 8px;
+      min-height: 0;
+      height: 100%;
       background: var(--glass);
     }
     .account-item {
@@ -200,10 +202,36 @@
     }
     .fc .fc-button-active { background: #3b82f6 !important; }
     .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(148,163,184,0.15) !important; }
-    .fc .fc-daygrid-day-number, .fc .fc-col-header-cell-cushion { color: var(--text) !important; }
-    .fc .fc-day-today .fc-daygrid-day-number { font-weight: 800 !important; color: #60a5fa !important; }
+    .fc .fc-col-header-cell {
+      background: linear-gradient(180deg, #1e3a8a, #3b82f6) !important;
+      color: #fff !important;
+      font-weight: 800 !important;
+      font-size: 0.95rem !important;
+      padding: 8px 4px !important;
+      border: none !important;
+    }
+    .fc .fc-col-header-cell-cushion {
+      color: #fff !important;
+      font-weight: 800 !important;
+    }
+    .fc .fc-daygrid-day-number {
+      color: var(--text) !important;
+      font-weight: 700 !important;
+      font-size: 0.9rem !important;
+    }
+    .fc .fc-day-today .fc-daygrid-day-number {
+      font-weight: 900 !important;
+      color: #fff !important;
+      background: #3b82f6 !important;
+      border-radius: 50%;
+      width: 1.6em;
+      height: 1.6em;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
     .fc .fc-scrollgrid, .fc .fc-daygrid-body, .fc .fc-timegrid-body { background: transparent !important; }
-    .fc .fc-toolbar-title { color: var(--text) !important; font-weight: 800 !important; font-size: 1.25rem; }
+    .fc .fc-toolbar-title { color: #60a5fa !important; font-weight: 900 !important; font-size: 1.35rem; text-shadow: 0 1px 2px rgba(0,0,0,0.5); }
 
     /* Condense all-day events to a single line */
     .fc-event.fc-event-allday,
@@ -268,12 +296,13 @@
     #viewMenu.show { display: block !important; }
 
     @media (max-width: 800px) {
-      #layout { flex-direction: column; height: auto; min-height: calc(100dvh - 140px); }
-      #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--glass-border); max-height: 200px; }
-      header { padding: max(16px, env(safe-area-inset-top)) 8px 8px; }
+      #layout { flex-direction: column; height: calc(100dvh - 100px - env(safe-area-inset-top)); min-height: 0; }
+      #sidebar { display: none !important; }
+      header { padding: max(12px, env(safe-area-inset-top)) 8px 8px; }
       .controls { gap: 4px; }
       button { padding: 5px 8px; font-size: 0.75rem; }
       #viewSelect { min-width: 90px; font-size: 0.75rem; }
+      #calendar { padding: 4px; }
     }
   </style>
 </head>
@@ -326,7 +355,7 @@
         <option value="dayGridMonth">Month</option>
         <option value="timeGridWeek">Week</option>
         <option value="timeGridDay">Day</option>
-        <option value="listWeek">List</option>
+        <option value="listMonth">List</option>
         <option value="multiMonthYear">Year</option>
         <option value="dayGridWeek">Week Grid</option>
         <option value="timeGridThreeDay">3-Day</option>
@@ -621,7 +650,7 @@
         headerToolbar: false,
         views: {
           multiMonthYear: { type: 'multiMonth', duration: { months: 12 }, buttonText: 'Year' },
-          listMonth: { buttonText: 'List Month' },
+          listMonth: { type: 'list', duration: { months: 3 }, buttonText: 'List' },
           listWeek: { buttonText: 'List Week' },
           listDay: { buttonText: 'List Day' },
           dayGridWeek: { type: 'dayGrid', duration: { weeks: 1 }, buttonText: 'Week Grid' },
@@ -748,7 +777,7 @@
         hasLocal = true;
         const color = colors[colorIndex++ % colors.length];
         const key = 'device-local';
-        calendarVisibility[key] = true;
+        calendarVisibility[key] = true; // Always force device calendars on
 
         const accDiv = document.createElement('div');
         accDiv.className = 'account-item';
@@ -758,7 +787,9 @@
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = true;
-        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        cb.disabled = true; // Always on, cannot be unchecked
+        cb.onchange = () => { calendarVisibility[key] = true; calendar.refetchEvents(); }; // Force true
+        calendarVisibility[key] = true;
         label.appendChild(cb);
         label.appendChild(document.createTextNode('All device calendars'));
         accDiv.appendChild(label);
@@ -803,7 +834,7 @@
       for (const account of msAccounts) {
         const color = colors[colorIndex++ % colors.length];
         const key = 'ms-' + account.username;
-        calendarVisibility[key] = true;
+        calendarVisibility[key] = true; // Always force device calendars on
 
         const accDiv = document.createElement('div');
         accDiv.className = 'account-item';
@@ -813,7 +844,9 @@
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = true;
-        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        cb.disabled = true; // Always on, cannot be unchecked
+        cb.onchange = () => { calendarVisibility[key] = true; calendar.refetchEvents(); }; // Force true
+        calendarVisibility[key] = true;
         label.appendChild(cb);
         label.appendChild(document.createTextNode('All calendars'));
         accDiv.appendChild(label);
@@ -857,7 +890,7 @@
       for (const g of googleAccounts) {
         const color = colors[colorIndex++ % colors.length];
         const key = 'google-' + g.email;
-        calendarVisibility[key] = true;
+        calendarVisibility[key] = true; // Always force device calendars on
 
         const accDiv = document.createElement('div');
         accDiv.className = 'account-item';
@@ -867,7 +900,9 @@
         const cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.checked = true;
-        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        cb.disabled = true; // Always on, cannot be unchecked
+        cb.onchange = () => { calendarVisibility[key] = true; calendar.refetchEvents(); }; // Force true
+        calendarVisibility[key] = true;
         label.appendChild(cb);
         label.appendChild(document.createTextNode('All calendars'));
         accDiv.appendChild(label);
@@ -906,7 +941,7 @@
       for (const ics of publicIcs) {
         const color = colors[colorIndex++ % colors.length];
         const key = 'ics-' + ics.url;
-        calendarVisibility[key] = true;
+        calendarVisibility[key] = true; // Always force device calendars on
 
         const accDiv = document.createElement('div');
         accDiv.className = 'account-item';
@@ -915,8 +950,10 @@
         label.className = 'cal-toggle';
         const cb = document.createElement('input');
         cb.type = 'checkbox';
-        cb.checked = calendarVisibility[key];
-        cb.onchange = () => { calendarVisibility[key] = cb.checked; calendar.refetchEvents(); };
+        cb.checked = true;
+        cb.disabled = true; // Always on, cannot be unchecked
+        cb.onchange = () => { calendarVisibility[key] = true; calendar.refetchEvents(); }; // Force true
+        calendarVisibility[key] = true;
         label.appendChild(cb);
         label.appendChild(document.createTextNode('Public calendar'));
         accDiv.appendChild(label);
