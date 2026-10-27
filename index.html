@@ -426,6 +426,7 @@
       const el = document.getElementById('calendar');
       calendar = new FullCalendar.Calendar(el, {
         initialView: 'dayGridMonth',
+        initialDate: new Date(),
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
@@ -470,6 +471,7 @@
         }
       });
       calendar.render();
+      calendar.today();
     }
 
     async function addOutlookAccount() {
