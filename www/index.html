@@ -213,6 +213,13 @@
     .fc .fc-daygrid-day-number, .fc .fc-col-header-cell-cushion { color: var(--text) !important; }
     .fc .fc-scrollgrid, .fc .fc-daygrid-body, .fc .fc-timegrid-body { background: transparent !important; }
     .fc .fc-toolbar-title { color: var(--text) !important; font-weight: 600; }
+
+    /* Force hide any FullCalendar view buttons that might still appear */
+    .fc .fc-toolbar-chunk:last-child .fc-button-group,
+    .fc .fc-button-group { display: none !important; }
+    #viewMenu { display: none !important; }
+    #viewMenu.show { display: block !important; }
+
     @media (max-width: 800px) {
       #layout { flex-direction: column; height: auto; min-height: calc(100dvh - 140px); }
       #sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--glass-border); max-height: 200px; }
@@ -444,7 +451,7 @@
       const viewMenu = document.getElementById('viewMenu');
       viewBtn.onclick = (e) => {
         e.stopPropagation();
-        viewMenu.style.display = viewMenu.style.display === 'block' ? 'none' : 'block';
+        viewMenu.classList.toggle('show');
       };
       document.querySelectorAll('.view-option').forEach(btn => {
         btn.onclick = () => {
@@ -452,10 +459,10 @@
           const label = btn.textContent.trim();
           if (calendar) calendar.changeView(view);
           viewBtn.textContent = label + ' ▾';
-          viewMenu.style.display = 'none';
+          viewMenu.classList.remove('show');
         };
       });
-      document.addEventListener('click', () => { viewMenu.style.display = 'none'; });
+      document.addEventListener('click', () => { viewMenu.classList.remove('show'); });
       document.getElementById('refresh').onclick = async () => {
         const btn = document.getElementById('refresh');
         const original = btn.textContent;
