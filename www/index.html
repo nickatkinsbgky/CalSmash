@@ -514,39 +514,85 @@
           status.textContent = 'Calendar plugin missing. Plugins: ' + keys + '. Check that @capacitor/calendar is installed and synced.';
           return [];
         }
-        // Always prefer existing grant; only request once per install if never granted
+        // Always prefer existing grant; only request full access once per install
         const PERM_KEY = 'calsmash_cal_perm_granted';
         let alreadyGranted = localStorage.getItem(PERM_KEY) === 'true';
         let perms = {};
-        try { perms = await Calendar.getPermissions(); } catch (_) {}
-        const currentlyGranted = perms.readCalendar === 'granted' || perms.writeCalendar === 'granted';
+        try {
+          // Official @capacitor/calendar uses checkPermissions
+          if (typeof Calendar.checkPermissions === 'function') {
+            perms = await Calendar.checkPermissions();
+          } else if (typeof Calendar.getPermissions === 'function') {
+            perms = await Calendar.getPermissions();
+          }
+        } catch (e) { console.warn('perm check', e); }
+        const currentlyGranted = (perms.readCalendar === 'granted') || (perms.writeCalendar === 'granted');
         if (currentlyGranted) {
           localStorage.setItem(PERM_KEY, 'true');
           alreadyGranted = true;
         }
-        if (!alreadyGranted && !currentlyGranted) {
-          status.textContent = 'Requesting calendar access (one-time)...';
+        if (!alreadyGranted) {
+          status.textContent = 'Requesting full calendar access (one-time)...';
           try {
-            await Calendar.requestPermissions({ permissions: ['readCalendar'] });
-            perms = await Calendar.getPermissions();
-            if (perms.readCalendar === 'granted') {
+            // Request both for full access
+            if (typeof Calendar.requestPermissions === 'function') {
+              await Calendar.requestPermissions({ permissions: ['readCalendar', 'writeCalendar'] });
+            }
+            // Re-check
+            if (typeof Calendar.checkPermissions === 'function') {
+              perms = await Calendar.checkPermissions();
+            } else if (typeof Calendar.getPermissions === 'function') {
+              perms = await Calendar.getPermissions();
+            }
+            if (perms.readCalendar === 'granted' || perms.writeCalendar === 'granted') {
               localStorage.setItem(PERM_KEY, 'true');
+              alreadyGranted = true;
             }
           } catch (e) {
             console.warn('requestPermissions', e);
           }
-          if (localStorage.getItem(PERM_KEY) !== 'true' && perms.readCalendar !== 'granted') {
-            status.textContent = 'Calendar permission needed. Enable in Settings → Apps → CalSmash → Permissions, then reopen.';
+          if (!alreadyGranted && perms.readCalendar !== 'granted' && perms.writeCalendar !== 'granted') {
+            status.textContent = 'Calendar permission needed. Go to Settings → Apps → CalSmash → Permissions and allow Calendar, then reopen.';
             return [];
           }
         }
         status.textContent = 'Loading calendars from device...';
-        const result = await Calendar.listCalendars();
+        let result;
+        try {
+          result = await Calendar.listCalendars();
+        } catch (e) {
+          console.error('listCalendars', e);
+          status.textContent = 'listCalendars failed: ' + (e.message || e);
+          // Try findEvents as fallback even if list fails
+          result = null;
+        }
         const cals = result?.calendars || result?.result || result || [];
         localCalendars = Array.isArray(cals) ? cals : [];
-        status.textContent = localCalendars.length
-          ? `Found ${localCalendars.length} calendar(s): ` + localCalendars.map(c => c.displayName || c.name || c.id).join(', ')
-          : 'No device calendars returned. Ensure Outlook/Google Calendar has synced to the system calendar.';
+        if (localCalendars.length === 0) {
+          // Fallback: try to query events directly in case list is empty but permission works
+          try {
+            const now = new Date();
+            const start = new Date(now); start.setMonth(start.getMonth() - 1);
+            const end = new Date(now); end.setMonth(end.getMonth() + 2);
+            const evRes = await Calendar.findEvents({
+              startDate: start.toISOString(),
+              endDate: end.toISOString()
+            });
+            const evs = evRes?.events || evRes?.result || evRes || [];
+            if (Array.isArray(evs) && evs.length > 0) {
+              status.textContent = `Permission OK — found ${evs.length} events (calendars list empty, but data exists). Sync your Outlook/Google calendar to the device calendar for full listing.`;
+              // Synthesize a dummy calendar so events can still be loaded later
+              localCalendars = [{ id: 'device-fallback', displayName: 'Device Calendar', name: 'Device' }];
+            } else {
+              status.textContent = 'No device calendars or events found. Make sure Outlook or Google Calendar is installed and set to sync to the system calendar.';
+            }
+          } catch (e2) {
+            console.error('findEvents fallback', e2);
+            status.textContent = 'No device calendars returned. Ensure Outlook/Google Calendar has synced to the system calendar.';
+          }
+        } else {
+          status.textContent = `Found ${localCalendars.length} calendar(s): ` + localCalendars.map(c => c.displayName || c.name || c.id || c.title).join(', ');
+        }
         return localCalendars;
       } catch (e) {
         console.error('loadLocalCalendars', e);
