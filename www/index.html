@@ -375,6 +375,41 @@
       #viewSelect { min-width: 90px; font-size: 0.75rem; }
       #calendar { padding: 4px; }
     }
+  
+    /* Compact events and calendar */
+    .fc-event,
+    .fc-list-event,
+    .fc-daygrid-event,
+    .fc-timegrid-event {
+      font-size: 0.72rem !important;
+      padding: 1px 4px !important;
+      line-height: 1.25 !important;
+      margin-bottom: 1px !important;
+    }
+    .fc-event-title,
+    .fc-list-event-title {
+      font-size: 0.72rem !important;
+      line-height: 1.3 !important;
+    }
+    .fc-list-event-time {
+      font-size: 0.68rem !important;
+      padding: 2px 4px !important;
+    }
+    .fc .fc-list-day {
+      font-size: 0.85rem !important;
+      padding: 4px 8px !important;
+    }
+    .fc-daygrid-day-number {
+      font-size: 0.8rem !important;
+    }
+    .fc-col-header-cell {
+      font-size: 0.75rem !important;
+      padding: 4px 2px !important;
+    }
+    .fc-timegrid-slot {
+      height: 1.6em !important;
+    }
+
   </style>
 </head>
 <body>
@@ -882,7 +917,16 @@
     // Navigation buttons
     document.getElementById('calPrev').onclick = () => calendar && calendar.prev();
     document.getElementById('calNext').onclick = () => calendar && calendar.next();
-    document.getElementById('calToday').onclick = () => calendar && calendar.today();
+    document.getElementById('calToday').onclick = () => {
+      if (!calendar) return;
+      calendar.today();
+      calendar.gotoDate(new Date());
+      // In list view, scroll the current day into view
+      setTimeout(() => {
+        const todayEl = document.querySelector('.fc-list-day.fc-day-today, .fc-list-event.fc-event-today, .fc-day-today');
+        if (todayEl) todayEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    };
 
     async function addOutlookAccount() {
       if (!MS_CLIENT_ID || MS_CLIENT_ID.includes('YOUR_')) {
