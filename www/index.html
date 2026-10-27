@@ -214,10 +214,19 @@
     .fc .fc-scrollgrid, .fc .fc-daygrid-body, .fc .fc-timegrid-body { background: transparent !important; }
     .fc .fc-toolbar-title { color: var(--text) !important; font-weight: 600; }
 
-    /* Force hide any FullCalendar view buttons that might still appear */
-    .fc .fc-toolbar-chunk:last-child .fc-button-group,
-    .fc .fc-button-group { display: none !important; }
-    #viewMenu { display: none !important; }
+    /* Completely suppress FullCalendar's own view buttons */
+    .fc .fc-toolbar-chunk:last-child,
+    .fc .fc-button-group,
+    .fc .fc-dayGridMonth-button,
+    .fc .fc-timeGridWeek-button,
+    .fc .fc-timeGridDay-button,
+    .fc .fc-listMonth-button,
+    .fc .fc-listWeek-button,
+    .fc .fc-listDay-button,
+    .fc .fc-multiMonthYear-button,
+    .fc .fc-dayGridWeek-button,
+    .fc .fc-timeGridThreeDay-button { display: none !important; }
+    #viewMenu { display: none !important; position: absolute; }
     #viewMenu.show { display: block !important; }
 
     @media (max-width: 800px) {
@@ -566,7 +575,7 @@
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
-          right: ''
+          right: false
         },
         views: {
           multiMonthYear: { type: 'multiMonth', duration: { months: 12 }, buttonText: 'Year' },
@@ -590,6 +599,16 @@
         eventDisplay: 'block'
       });
       calendar.render();
+      // Hard-remove any view buttons FullCalendar still injects
+      setTimeout(() => {
+        document.querySelectorAll('.fc .fc-toolbar-chunk:last-child, .fc .fc-button-group').forEach(el => el.remove());
+        document.querySelectorAll('.fc [class*="-button"]').forEach(btn => {
+          const cls = btn.className || '';
+          if (!cls.includes('prev') && !cls.includes('next') && !cls.includes('today')) {
+            btn.remove();
+          }
+        });
+      }, 100);
     }
 
     async function addOutlookAccount() {
