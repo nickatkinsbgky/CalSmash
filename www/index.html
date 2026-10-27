@@ -214,8 +214,10 @@
     .fc .fc-scrollgrid, .fc .fc-daygrid-body, .fc .fc-timegrid-body { background: transparent !important; }
     .fc .fc-toolbar-title { color: var(--text) !important; font-weight: 600; }
 
-    /* Completely suppress FullCalendar's own view buttons */
-    .fc .fc-toolbar-chunk:last-child,
+    /* Completely suppress FullCalendar's own toolbar and view buttons */
+    .fc .fc-header-toolbar,
+    .fc .fc-toolbar,
+    .fc .fc-toolbar-chunk,
     .fc .fc-button-group,
     .fc .fc-dayGridMonth-button,
     .fc .fc-timeGridWeek-button,
@@ -244,6 +246,9 @@
     <h1>CalSmash</h1>
     <div class="controls">
       <button id="loadDevice" style="background:linear-gradient(180deg,#22c55e,#16a34a);">Load Calendars</button>
+      <button id="calPrev" class="secondary" style="padding:6px 10px;">‹</button>
+      <button id="calNext" class="secondary" style="padding:6px 10px;">›</button>
+      <button id="calToday" class="secondary" style="padding:6px 10px; font-size:0.75rem;">Today</button>
       <div class="view-dropdown" style="position:relative;">
         <button id="viewBtn" type="button" style="min-width:100px; text-align:left; padding-right:24px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center;">Month ▾</button>
         <div id="viewMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:4px; background:var(--glass-strong); border:1px solid var(--glass-border); border-radius:12px; padding:6px; z-index:30; min-width:140px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
@@ -472,6 +477,9 @@
         };
       });
       document.addEventListener('click', () => { viewMenu.classList.remove('show'); });
+      document.getElementById('calPrev').onclick = () => { if (calendar) calendar.prev(); };
+      document.getElementById('calNext').onclick = () => { if (calendar) calendar.next(); };
+      document.getElementById('calToday').onclick = () => { if (calendar) calendar.today(); };
       document.getElementById('refresh').onclick = async () => {
         const btn = document.getElementById('refresh');
         const original = btn.textContent;
@@ -572,11 +580,7 @@
       const el = document.getElementById('calendar');
       calendar = new FullCalendar.Calendar(el, {
         initialView: 'dayGridMonth',
-        headerToolbar: {
-          left: 'prev,next today',
-          center: 'title',
-          right: false
-        },
+        headerToolbar: false,
         views: {
           multiMonthYear: { type: 'multiMonth', duration: { months: 12 }, buttonText: 'Year' },
           listMonth: { buttonText: 'List Month' },
