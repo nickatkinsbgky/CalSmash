@@ -14,7 +14,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/calendar": "^1.0.1",
-    "@capacitor/cli": "^7.6.9",
+    "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3"
   }
 }

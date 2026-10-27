@@ -33,6 +33,22 @@ jobs:
       - name: Capacitor sync
         run: npx cap sync android
 
+      - name: Inject calendar permissions into AndroidManifest
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if [ -f "$MANIFEST" ]; then
+            # Ensure READ_CALENDAR and WRITE_CALENDAR are present
+            if ! grep -q 'android.permission.READ_CALENDAR' "$MANIFEST"; then
+              # Insert permissions before the application tag using a temp file
+              awk 'BEGIN{inserted=0} /<application/ && !inserted { print "    <uses-permission android:name=\"android.permission.READ_CALENDAR\" />"; print "    <uses-permission android:name=\"android.permission.WRITE_CALENDAR\" />"; inserted=1 } {print}' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+            fi
+            echo "Permissions injected (or already present)"
+            grep -n "CALENDAR" "$MANIFEST" || true
+          else
+            echo "AndroidManifest.xml not found"
+            exit 1
+          fi
+
       - name: Install app icons from comic-burst pack
         run: |
           mkdir -p android/app/src/main/res/mipmap-mdpi android/app/src/main/res/mipmap-hdpi android/app/src/main/res/mipmap-xhdpi android/app/src/main/res/mipmap-xxhdpi android/app/src/main/res/mipmap-xxxhdpi

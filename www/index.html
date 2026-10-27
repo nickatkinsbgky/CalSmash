@@ -324,14 +324,21 @@
         return [];
       }
       try {
-        // Try multiple ways to get the Calendar plugin
-        let Calendar = window.Capacitor?.Plugins?.Calendar;
-        if (!Calendar && window.Capacitor?.registerPlugin) {
-          try { Calendar = window.Capacitor.registerPlugin('Calendar'); } catch(e) {}
+        // Capacitor 8 plugin access
+        let Calendar = null;
+        if (window.Capacitor && window.Capacitor.Plugins) {
+          Calendar = window.Capacitor.Plugins.Calendar;
+        }
+        if (!Calendar && window.Capacitor && window.Capacitor.registerPlugin) {
+          try {
+            Calendar = window.Capacitor.registerPlugin('Calendar');
+          } catch (e) {
+            console.warn('registerPlugin failed', e);
+          }
         }
         if (!Calendar) {
-          status.textContent = 'Calendar plugin missing. Check that @capacitor/calendar is installed and APK was rebuilt.';
-          console.warn('Calendar plugin not found. Capacitor:', !!window.Capacitor, 'Plugins:', Object.keys(window.Capacitor?.Plugins || {}));
+          const plugins = window.Capacitor?.Plugins ? Object.keys(window.Capacitor.Plugins).join(', ') : 'none';
+          status.textContent = 'Calendar plugin not found. Available plugins: ' + plugins + '. Rebuild APK after aligning Capacitor versions.';
           return [];
         }
         status.textContent = 'Checking calendar permissions...';
@@ -552,7 +559,7 @@
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay,listMonth,listWeek,listDay,multiMonthYear,dayGridWeek,timeGridThreeDay'
+          right: ''
         },
         views: {
           multiMonthYear: { type: 'multiMonth', duration: { months: 12 }, buttonText: 'Year' },
