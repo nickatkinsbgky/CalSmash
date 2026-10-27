@@ -249,18 +249,15 @@
       <button id="calPrev" class="secondary" style="padding:6px 10px;">‹</button>
       <button id="calNext" class="secondary" style="padding:6px 10px;">›</button>
       <button id="calToday" class="secondary" style="padding:6px 10px; font-size:0.75rem;">Today</button>
-      <div class="view-dropdown" style="position:relative;">
-        <button id="viewBtn" type="button" style="min-width:100px; text-align:left; padding-right:24px; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center;">Month ▾</button>
-        <div id="viewMenu" style="display:none; position:absolute; top:100%; left:0; margin-top:4px; background:var(--glass-strong); border:1px solid var(--glass-border); border-radius:12px; padding:6px; z-index:30; min-width:140px; box-shadow:0 8px 24px rgba(0,0,0,0.4);">
-          <button class="view-option secondary" data-view="dayGridMonth" style="width:100%; margin:2px 0; font-size:0.8rem; text-align:left;">Month</button>
-          <button class="view-option secondary" data-view="timeGridWeek" style="width:100%; margin:2px 0; font-size:0.8rem; text-align:left;">Week</button>
-          <button class="view-option secondary" data-view="timeGridDay" style="width:100%; margin:2px 0; font-size:0.8rem; text-align:left;">Day</button>
-          <button class="view-option secondary" data-view="listWeek" style="width:100%; margin:2px 0; font-size:0.8rem; text-align:left;">List</button>
-          <button class="view-option secondary" data-view="multiMonthYear" style="width:100%; margin:2px 0; font-size:0.8rem; text-align:left;">Year</button>
-          <button class="view-option secondary" data-view="dayGridWeek" style="width:100%; margin:2px 0; font-size:0.8rem; text-align:left;">Week Grid</button>
-          <button class="view-option secondary" data-view="timeGridThreeDay" style="width:100%; margin:2px 0; font-size:0.8rem; text-align:left;">3-Day</button>
-        </div>
-      </div>
+      <select id="viewSelect" title="Calendar view" style="min-width:110px; padding:6px 10px; border-radius:10px; background:rgba(15,23,42,0.75); color:var(--text); border:1px solid var(--glass-border); font-weight:600;">
+        <option value="dayGridMonth">Month</option>
+        <option value="timeGridWeek">Week</option>
+        <option value="timeGridDay">Day</option>
+        <option value="listWeek">List</option>
+        <option value="multiMonthYear">Year</option>
+        <option value="dayGridWeek">Week Grid</option>
+        <option value="timeGridThreeDay">3-Day</option>
+      </select>
       <button id="refresh" style="background:linear-gradient(180deg,#22c55e,#16a34a);">Refresh</button>
       <details style="position:relative;">
         <summary style="list-style:none; cursor:pointer; padding:6px 10px; border-radius:10px; background:rgba(30,41,59,0.5); border:1px solid var(--glass-border); font-size:0.8rem;">More</summary>
@@ -461,22 +458,9 @@
       };
       document.getElementById('icloudConnect').onclick = tryICloudConnect;
       document.getElementById('addIcs').onclick = addPublicIcs;
-      const viewBtn = document.getElementById('viewBtn');
-      const viewMenu = document.getElementById('viewMenu');
-      viewBtn.onclick = (e) => {
-        e.stopPropagation();
-        viewMenu.classList.toggle('show');
+      document.getElementById('viewSelect').onchange = (e) => {
+        if (calendar) calendar.changeView(e.target.value);
       };
-      document.querySelectorAll('.view-option').forEach(btn => {
-        btn.onclick = () => {
-          const view = btn.dataset.view;
-          const label = btn.textContent.trim();
-          if (calendar) calendar.changeView(view);
-          viewBtn.textContent = label + ' ▾';
-          viewMenu.classList.remove('show');
-        };
-      });
-      document.addEventListener('click', () => { viewMenu.classList.remove('show'); });
       document.getElementById('calPrev').onclick = () => { if (calendar) calendar.prev(); };
       document.getElementById('calNext').onclick = () => { if (calendar) calendar.next(); };
       document.getElementById('calToday').onclick = () => { if (calendar) calendar.today(); };
