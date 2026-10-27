@@ -422,6 +422,12 @@
       loadAllEvents();
     }
 
+    function hashCode(str) {
+      let h = 0;
+      for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+      return h;
+    }
+
     function initCalendar() {
       const el = document.getElementById('calendar');
       calendar = new FullCalendar.Calendar(el, {
@@ -462,8 +468,18 @@
         },
         eventDisplay: 'block',
         eventDidMount: function(info) {
+          const el = info.el;
+          // Unique gradient per event for easy distinction
+          const hues = [200, 160, 30, 0, 270, 320, 190, 90, 25, 210, 140, 350];
+          const idx = Math.abs(hashCode((info.event.title || '') + (info.event.startStr || ''))) % hues.length;
+          const h = hues[idx];
+          el.style.background = `linear-gradient(90deg, hsl(${h}, 70%, 45%), hsl(${(h+40)%360}, 75%, 55%))`;
+          el.style.border = 'none';
+          el.style.color = '#fff';
+          el.style.fontWeight = '600';
+          el.style.boxShadow = '0 1px 3px rgba(0,0,0,0.3)';
+
           if (info.event.allDay) {
-            const el = info.el;
             el.style.whiteSpace = 'nowrap';
             el.style.overflow = 'hidden';
             el.style.textOverflow = 'ellipsis';
